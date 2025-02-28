@@ -54,7 +54,7 @@ def _get_label_tensor(seq, cache, compute_moves_fn):
     return label_tensor / t.sum(label_tensor)
 
 def calculate_tictactoe_data() -> TicTacToeData:
-    games = generate_all_games([Board()])[:10000]
+    games = generate_all_games([Board()])
     games_tensor = t.tensor(
         [
             [10] + game.moves_played + ([9] * (10 - len(game.moves_played)))

@@ -118,7 +118,7 @@ class Board:
     def __str__(self) -> str:
         def cell_to_str(cell):
             if cell is None:
-                return ""
+                return " "
             elif cell == Player.X:
                 return "X"
             elif cell == Player.O:
