@@ -1,22 +1,22 @@
-import random
-import math
-from typing import Optional, Callable
-from enum import Enum
+import os
+import pickle
 from copy import deepcopy
 import numpy as np
 import torch as t
 from torch import Tensor
 from jaxtyping import Float
 from tqdm import tqdm
+from dataclasses import dataclass
 
 from tictactoe.game import *
 
 
-class TicTacToeData(Enum):
-    GAMES_DATA: Float[Tensor, "n_games game_length"]  # All games get filled up to length 10: [10, move1, ... movek, potentially 9's] (last element removed as we do next move prediction)
-    RANDOM_MOVE_LABELS: Float[Tensor, "n_games game_length n_tokens"]  # 1/k on all k legal moves, 0 for other tokens
-    WEAK_GOAL_LABELS: Float[Tensor, "n_games game_length n_tokens"]  # 1/k on all k optimal moves under weak goal, 0 for other tokens
-    STRONG_GOAL_LABELS: Float[Tensor, "n_games game_length n_tokens"]
+@dataclass
+class TicTacToeData:
+    games_data: Float[Tensor, "n_games game_length"]  # All games get filled up to length 10: [10, move1, ... movek, potentially 9's] (last element removed as we do next move prediction)
+    random_move_labels: Float[Tensor, "n_games game_length n_tokens"]  # 1/k on all k legal moves, 0 for other tokens
+    weak_goals_labels: Float[Tensor, "n_games game_length n_tokens"]  # 1/k on all k optimal moves under weak goal, 0 for other tokens
+    strong_goals_labels: Float[Tensor, "n_games game_length n_tokens"]
 
 
 def _next_possible_moves(seq: list[int]) -> list[int]:
@@ -88,8 +88,21 @@ def calculate_tictactoe_data() -> TicTacToeData:
         strong_labels_all.append(t.stack(strong_label))
     
     return TicTacToeData(
-        GAMES_DATA=games_data,
-        RANDOM_MOVE_LABELS=t.stack(random_labels_all),
-        WEAK_GOAL_LABELS=t.stack(weak_labels_all),
-        STRONG_GOAL_LABELS=t.stack(strong_labels_all),
+        games_data=games_data,
+        random_move_labels=t.stack(random_labels_all),
+        weak_goals_labels=t.stack(weak_labels_all),
+        strong_goals_labels=t.stack(strong_labels_all),
     )
+
+
+def cache_tictactoe_data(path: str) -> TicTacToeData:
+    if os.path.exists(path):
+        with open(path, 'rb') as f:
+            data = pickle.load(f)
+        assert isinstance(data, TicTacToeData), f"Data loaded from {path} is not a TicTacToeData object"
+        return data
+    else:
+        data = calculate_tictactoe_data()
+        with open(path, 'wb') as f:
+            pickle.dump(data, f)
+        return data

@@ -60,9 +60,9 @@ class Board:
     def _set_game_state(self) -> State:
         termination_conditions, _ = self.get_termination_conditions()
         if termination_conditions or all(cell is not None for cell in self.grid):
-            self.game_state = State.ONGOING
-        else:
             self.game_state = State.OVER
+        else:
+            self.game_state = State.ONGOING
     
     def get_winner(self, goal: Goal) -> Player | None:
         _, terminating_player = self.get_termination_conditions()
