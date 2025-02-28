@@ -72,7 +72,7 @@ def calculate_tictactoe_data() -> TicTacToeData:
         random_label: list[Float[Tensor, "n_tokens"]] = []
         weak_label = []
         strong_label = []
-        for idx in range(len(games)):
+        for idx in range(len(game)):
             seq: list[int] = game[:idx+1].tolist()
             random_label.append(
                 _get_label_tensor(seq, cache_random_label, _next_possible_moves)

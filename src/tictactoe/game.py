@@ -59,7 +59,7 @@ class Board:
             
     def _set_game_state(self) -> State:
         termination_conditions, _ = self.get_termination_conditions()
-        if len(termination_conditions) == 0:
+        if termination_conditions or all(cell is not None for cell in self.grid):
             self.game_state = State.ONGOING
         else:
             self.game_state = State.OVER
@@ -103,7 +103,7 @@ class Board:
     def undo(self) -> None:
         last_move = self.moves_played.pop()
         self.grid[last_move] = None
-        self.game_state = State.ONGOING
+        self._set_game_state()
         self._swap_turn()
 
     def __str__(self) -> str:
