@@ -1,11 +1,8 @@
-import random
 import math
-from typing import Optional, Callable
+from typing import Optional
 from enum import Enum
 from copy import deepcopy
-import numpy as np
-import torch
-from torch import Tensor
+
 
 class State(Enum):
     OVER = 1
@@ -166,8 +163,7 @@ def minimax(board: Board, goal: Goal) -> int:
         case _:
             raise ValueError(f"Unexpected turn in minimax {board.turn}")
 
-
-def get_best_moves(board: Board) -> list[int]:
+def get_best_moves(board: Board, goal: Goal) -> list[int]:
     """Player X is the maximizer and Player O is the minimizer"""
     match board.turn:
         case Player.X:
@@ -180,7 +176,7 @@ def get_best_moves(board: Board) -> list[int]:
     best_moves: list[tuple[int, int]] = []  # (move, score)
     for move in board.get_possible_moves():
         board.make_move(move)
-        score = minimax(board)
+        score = minimax(board, goal)
         board.undo()
         match board.turn:
             case Player.X:
