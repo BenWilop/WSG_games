@@ -48,12 +48,13 @@ def _get_label_tensor(seq, cache, compute_moves_fn):
     if seq_key not in cache:
         cache[seq_key] = compute_moves_fn(seq)
     moves = cache[seq_key]
-    label_vector = [1.0 if i in moves else 0.0 for i in range(9)]
+    assert len(moves) > 0
+    label_vector = [1.0 if i in moves else 0.0 for i in range(10)]  # can predict 9 as well to stop game
     label_tensor = t.tensor(label_vector, requires_grad=False)
     return label_tensor / t.sum(label_tensor)
 
 def calculate_tictactoe_data() -> TicTacToeData:
-    games = generate_all_games([Board()])
+    games = generate_all_games([Board()])[:10000]
     games_tensor = t.tensor(
         [
             [10] + game.moves_played + ([9] * (10 - len(game.moves_played)))

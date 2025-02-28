@@ -2,6 +2,7 @@ import math
 from typing import Optional
 from enum import Enum
 from copy import deepcopy
+import torch as t
 
 
 class State(Enum):
@@ -17,11 +18,19 @@ class Player(Enum):
     O = 1
 
 class Board:
-    def __init__(self) -> None:
+    def __init__(self, seq: list[int | t.Tensor] | None = None) -> None:
+        """If seq != None, then the board is initialized with the moves in seq"""
         self.grid: list[Player | None] = [None] * 9  # Game board, cell i has Player i in it
         self.moves_played: list[int] = []  # list of cell ids that have been played
         self.game_state: State = State.ONGOING
         self.turn: Player = Player.X  # X starts
+
+        if seq is not None:
+            if isinstance(seq, t.Tensor):
+                seq = seq.tolist()
+            for move in seq:
+                if move in range(9):
+                    self.make_move(move)
 
     def _swap_turn(self) -> None:
         match self.turn:
@@ -107,10 +116,28 @@ class Board:
         self._swap_turn()
 
     def __str__(self) -> str:
-        row1 = "| {} | {} | {} |".format(self.grid[0], self.grid[1], self.grid[2])
-        row2 = "| {} | {} | {} |".format(self.grid[3], self.grid[4], self.grid[5])
-        row3 = "| {} | {} | {} |".format(self.grid[6], self.grid[7], self.grid[8])
-        return row1 + '\n' + row2 + '\n' + row3
+        def cell_to_str(cell):
+            if cell is None:
+                return ""
+            elif cell == Player.X:
+                return "X"
+            elif cell == Player.O:
+                return "O"
+            else:
+                return str(cell)
+    
+        row1 = "| {} | {} | {} |".format(cell_to_str(self.grid[0]), cell_to_str(self.grid[1]), cell_to_str(self.grid[2]))
+        row2 = "| {} | {} | {} |".format(cell_to_str(self.grid[3]), cell_to_str(self.grid[4]), cell_to_str(self.grid[5]))
+        row3 = "| {} | {} | {} |".format(cell_to_str(self.grid[6]), cell_to_str(self.grid[7]), cell_to_str(self.grid[8]))
+        
+        return row1 + "\n" + row2 + "\n" + row3
+        
+    def replay(self) -> None:
+        temp_board = Board()
+        for i, move in enumerate(self.moves_played):
+            temp_board.make_move(move)
+            print(f"\nAfter move {i} (move: {move}):")
+            print(temp_board)
 
 def generate_all_games(
     boards: list[Board] = [Board()], finished_boards: Optional[list[Board]] = None
