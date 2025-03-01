@@ -117,26 +117,39 @@ def train_test_split(
     split = math.floor(split_ratio * n_games)
     train_inds, test_inds = inds[:split], inds[split:]
 
+    # Data
+    games_train = tictactoe_data.games_data[train_inds]
+    random_train = tictactoe_data.random_move_labels[train_inds]
+    weak_train = tictactoe_data.weak_goals_labels[train_inds]
+    strong_train = tictactoe_data.strong_goals_labels[train_inds]
+    games_test = tictactoe_data.games_data[test_inds]
+    random_test = tictactoe_data.random_move_labels[test_inds]
+    weak_test = tictactoe_data.weak_goals_labels[test_inds]
+    strong_test = tictactoe_data.strong_goals_labels[test_inds]
+
     if device is not None:
-        data = data.to(device)
-        print(labels.shape)
-        labels = labels.to(device)
-        print(labels.shape)
-    
-    tictactoe_train_data = TicTacToeData(
-      games_data = tictactoe_data.games_data[train_inds],
-      random_move_labels = tictactoe_data.random_move_labels[train_inds],
-      weak_goals_labels = tictactoe_data.weak_goals_labels[train_inds],
-      strong_goals_labels = tictactoe_data.strong_goals_labels[train_inds],
+        games_train = games_train.to(device)
+        random_train = random_train.to(device)
+        weak_train = weak_train.to(device)
+        strong_train = strong_train.to(device)
+        games_test = games_test.to(device)
+        random_test = random_test.to(device)
+        weak_test = weak_test.to(device)
+        strong_test = strong_test.to(device)
+
+    train_data = TicTacToeData(
+        games_data=games_train,
+        random_move_labels=random_train,
+        weak_goals_labels=weak_train,
+        strong_goals_labels=strong_train,
     )
-    tictactoe_test_data = TicTacToeData(
-      games_data = tictactoe_data.games_data[test_inds],
-      random_move_labels = tictactoe_data.random_move_labels[test_inds],
-      weak_goals_labels = tictactoe_data.weak_goals_labels[test_inds],
-      strong_goals_labels = tictactoe_data.strong_goals_labels[test_inds],
+    test_data = TicTacToeData(
+        games_data=games_test,
+        random_move_labels=random_test,
+        weak_goals_labels=weak_test,
+        strong_goals_labels=strong_test,
     )
-    
-    return tictactoe_train_data, tictactoe_test_data
+    return train_data, test_data
 
 def cache_tictactoe_data(path: str) -> TicTacToeData:
     if os.path.exists(path):
