@@ -1,4 +1,5 @@
 import os
+import math
 import pickle
 from copy import deepcopy
 import numpy as np
@@ -95,6 +96,47 @@ def calculate_tictactoe_data() -> TicTacToeData:
         strong_goals_labels=t.stack(strong_labels_all),
     )
 
+def train_test_split(
+    tictactoe_data: TicTacToeData,
+    split_ratio: float = 0.8,
+    device: str | None = None,
+    seed: str | None = None,
+):
+    if seed is not None:
+        t.random.manual_seed(seed)
+
+    # Check that data is coeherent
+    assert 0 <= split_ratio <= 1
+    n_games = tictactoe_data.games_data.shape[0]
+    assert n_games == len(tictactoe_data.random_move_labels)
+    assert n_games == len(tictactoe_data.weak_goals_labels)
+    assert n_games == len(tictactoe_data.strong_goals_labels)
+
+    # Indices
+    inds = t.randperm(n_games)
+    split = math.floor(split_ratio * n_games)
+    train_inds, test_inds = inds[:split], inds[split:]
+
+    if device is not None:
+        data = data.to(device)
+        print(labels.shape)
+        labels = labels.to(device)
+        print(labels.shape)
+    
+    tictactoe_train_data = TicTacToeData(
+      games_data = tictactoe_data.games_data[train_inds],
+      random_move_labels = tictactoe_data.random_move_labels[train_inds],
+      weak_goals_labels = tictactoe_data.weak_goals_labels[train_inds],
+      strong_goals_labels = tictactoe_data.strong_goals_labels[train_inds],
+    )
+    tictactoe_test_data = TicTacToeData(
+      games_data = tictactoe_data.games_data[test_inds],
+      random_move_labels = tictactoe_data.random_move_labels[test_inds],
+      weak_goals_labels = tictactoe_data.weak_goals_labels[test_inds],
+      strong_goals_labels = tictactoe_data.strong_goals_labels[test_inds],
+    )
+    
+    return tictactoe_train_data, tictactoe_test_data
 
 def cache_tictactoe_data(path: str) -> TicTacToeData:
     if os.path.exists(path):
