@@ -6,7 +6,7 @@ import torch as t
 from torch import Tensor
 from jaxtyping import Float
 
-from tictactoe.data import TicTacToeData
+from wsg_games.tictactoe.data import TicTacToeData
 
 def evaluate_predictions(predictions: Float[Tensor, "n_games game_length n_tokens"], tictactoe_data: TicTacToeData, loss_fn) -> dict[str, float]:
     """Returns dictionary metric -> value"""

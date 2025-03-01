@@ -8,7 +8,7 @@ from jaxtyping import Float
 from tqdm import tqdm
 from dataclasses import dataclass
 
-from tictactoe.game import *
+from wsg_games.tictactoe.game import *
 
 
 @dataclass
