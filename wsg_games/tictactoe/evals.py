@@ -5,15 +5,18 @@ from copy import deepcopy
 import torch as t
 from torch import Tensor
 from jaxtyping import Float
+import torch.nn.functional as F
 
 from wsg_games.tictactoe.data import TicTacToeData
 
-def evaluate_predictions(predictions: Float[Tensor, "n_games game_length n_tokens"], tictactoe_data: TicTacToeData, loss_fn) -> dict[str, float]:
+def evaluate_predictions(logits: Float[Tensor, "n_games game_length n_tokens"], tictactoe_data: TicTacToeData, loss_fn) -> dict[str, float]:
     """Returns dictionary metric -> value"""
     res = {}
-    res['weak_loss'] = loss_fn(predictions, tictactoe_data.weak_goals_labels).item()
-    res['strong_loss'] = loss_fn(predictions, tictactoe_data.strong_goals_labels).item()
+    res['weak_loss'] = loss_fn(logits, tictactoe_data.weak_goals_labels).item()
+    res['strong_loss'] = loss_fn(logits, tictactoe_data.strong_goals_labels).item()
     
+    predictions = F.softmax(logits, dim=1)
+
     # Pprediction is correct if the max token has a positive label.
     pred_indices = t.argmax(predictions, dim=-1)  # shape: [n_games, game_length]
     n_games, game_length, _ = predictions.shape
