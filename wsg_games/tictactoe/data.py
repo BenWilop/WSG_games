@@ -161,6 +161,7 @@ def random_sample_tictactoe_data(tictactoe_data: TicTacToeData, n_samples: int) 
         weak_goals_labels = tictactoe_data.weak_goals_labels[sample_inds],
         strong_goals_labels = tictactoe_data.strong_goals_labels[sample_inds]
     )
+    return sampled_data
 
 def cache_tictactoe_data(path: str) -> TicTacToeData:
     if os.path.exists(path):
