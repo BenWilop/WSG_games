@@ -6,7 +6,6 @@ import torch as t
 from torch import Tensor
 from jaxtyping import Float
 from transformer_lens import HookedTransformer
-import tqdm
 from collections import Counter
 import random
 
@@ -57,7 +56,7 @@ def sample_games(
     model: HookedTransformer, temp: float, num_games: int
 ) -> list[list[int]]:
     games: list[list[int]] = []
-    for _ in tqdm.tqdm(range(num_games)):
+    for _ in range(num_games):
         games.append(_sample_game(model, temp))
     return games
 
@@ -96,7 +95,7 @@ def inappropriate_end_state(game: list[int]) -> bool:
     return False
 
 
-def _check_played_after_player_victory(game: list[int]) -> bool:
+def _check_played_after_game_ends(game: list[int]) -> bool:
     board = Board()
     for move in game[1:]:
         if board.game_state == State.OVER and move != 9:
@@ -107,26 +106,12 @@ def _check_played_after_player_victory(game: list[int]) -> bool:
             return False
     return False
 
-
-def _check_played_after_draw_game(game: list[int]) -> bool:
-    board = Board()
-    for move in game[1:]:
-        if board.game_state == State.DRAW and move != 9:
-            return True
-        try:
-            board.make_move(move)
-        except:
-            return False
-    return False
-
-
 def eval_model(
     games: list[list[int]], game_evals: bool = False
 ) -> dict[str, float] | tuple[dict[str, float], dict[int, dict[str, bool]]]:
     eval_fs = [
         _check_played_repeat_moves,
-        _check_played_after_player_victory,
-        _check_played_after_draw_game,
+        _check_played_after_game_ends,
         inappropriate_end_state,
         _check_if_illegal_moves,
     ]
@@ -135,7 +120,7 @@ def eval_model(
         i: {func.__name__: False for func in eval_fs} for i in range(len(games))
     }
     game_count = len(games)
-    for i, game in tqdm.tqdm(enumerate(games)):
+    for i, game in enumerate(games):
         for func in eval_fs:
             if func(game):
                 eval_games[i][func.__name__] = True
