@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 from wsg_games.tictactoe.data import TicTacToeData
 
-def evaluate_predictions(logits: Float[Tensor, "n_games game_length n_tokens"], tictactoe_data: TicTacToeData, loss_fn) -> dict[str, float]:
+def evaluate_logits(logits: Float[Tensor, "n_games game_length n_tokens"], tictactoe_data: TicTacToeData, loss_fn) -> dict[str, float]:
     """Returns dictionary metric -> value"""
     res = {}
     res['weak_loss'] = loss_fn(logits, tictactoe_data.weak_goals_labels).item()
