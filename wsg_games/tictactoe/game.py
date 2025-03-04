@@ -12,10 +12,13 @@ class State(Enum):
 class Goal(Enum):
     WEAK_GOAL = 0   # X wins if X has 3 in a row
     STRONG_GOAL = 1  # X wins if O has 3 in a row
-    
-def __str__(self):
-    mapping = {0: "weak", 1: "strong"}
-    return mapping[self.value]
+      
+    def __str__(self):
+        mapping = {
+            Goal.WEAK_GOAL: "weak",
+            Goal.STRONG_GOAL: "strong",
+        }
+        return mapping[self]
 
 
 class Player(Enum):
