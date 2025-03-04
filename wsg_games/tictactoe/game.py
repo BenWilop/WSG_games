@@ -67,7 +67,7 @@ class Board:
                 self.grid[condition[0]]
                 == self.grid[condition[1]]
                 == self.grid[condition[2]]
-                != None
+                is not None
             ):
                 terminating_player = self.grid[condition[0]]
                 termination_conditions.append(win_conditions[condition])
@@ -148,9 +148,11 @@ class Board:
             print(temp_board)
 
 def generate_all_games(
-    boards: list[Board] = [Board()], finished_boards: Optional[list[Board]] = None
+    boards: list[Board] = None, finished_boards: Optional[list[Board]] = None
 ) -> list[Board]:
-    if finished_boards == None:
+    if boards is None:
+        boards = [Board()]
+    if finished_boards is None:
         print('Generating all games...')
         finished_boards = []
     ongoing_boards: list[Board] = []
@@ -219,7 +221,7 @@ def get_best_moves(board: Board, goal: Goal) -> list[int]:
                     best_score = score
                     best_moves.append((move, score))
             case Player.O:
-                if score < best_score:
+                if score <= best_score:
                     best_score = score
                     best_moves.append((move, score))
             case _:

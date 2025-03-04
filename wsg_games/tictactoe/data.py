@@ -25,7 +25,7 @@ def _next_possible_moves(seq: list[int]) -> list[int]:
     for move in seq[1:]:
         try:
             board.make_move(move)
-        except:
+        except ValueError:
             return [9]
     if board.game_state != State.ONGOING:
         return [9]
@@ -37,7 +37,7 @@ def _next_minimax_moves(seq: list[int], goal: Goal) -> list[int]:
     for move in seq[1:]:
         try:
             board.make_move(move)
-        except:
+        except ValueError:
             return [9]
     if board.game_state != State.ONGOING:
         return [9]
@@ -100,7 +100,7 @@ def train_test_split_tictactoe(
     tictactoe_data: TicTacToeData,
     split_ratio: float = 0.8,
     device: str | None = None,
-    seed: str | None = None,
+    seed: int | None = None,
 ):
     if seed is not None:
         t.random.manual_seed(seed)
