@@ -63,12 +63,7 @@ class Board:
             (2, 4, 6): "bottom left -> top right",
         }
         for condition in win_conditions.keys():
-            if (
-                self.grid[condition[0]]
-                == self.grid[condition[1]]
-                == self.grid[condition[2]]
-                is not None
-            ):
+            if (self.grid[condition[0]] is not None) and (self.grid[condition[0]] == self.grid[condition[1]] == self.grid[condition[2]]):
                 terminating_player = self.grid[condition[0]]
                 termination_conditions.append(win_conditions[condition])
 
