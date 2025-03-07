@@ -4,9 +4,8 @@ from torch.utils.data import TensorDataset, DataLoader
 from tqdm.notebook import tqdm
 import wandb
 
-from wsg_games.tictactoe.train import rearrange
+from wsg_games.tictactoe.train.train import rearrange, log_generating_game_wandb, evaluate_model
 from wsg_games.tictactoe.data import random_sample_tictactoe_data
-from wsg_games.tictactoe.evals import evaluate_model, log_generating_game_wandb
 
 def _quick_evaluation(name, model, test_data):
     model.eval()

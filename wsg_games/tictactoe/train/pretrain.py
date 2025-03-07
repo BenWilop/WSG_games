@@ -6,13 +6,12 @@ from einops import rearrange
 
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.data import random_sample_tictactoe_data
-from wsg_games.tictactoe.create_models import get_model_config
 from wsg_games.tictactoe.train.train import run_full_training
 from wsg_games.tictactoe.train.save_load_models import load_model, load_model_get_matching_files, save_model
-from wsg_games.tictactoe.analyse_data import count_parameters, 
+from wsg_games.tictactoe.train.create_models import count_parameters
 
 
-def pretrain_models(experiment_folder:str, project_name: str, tictactoe_train_data, tictactoe_test_data, training_cfg, model_size_to_epochs) -> None:
+def pretrain_models(experiment_folder:str, project_name: str, tictactoe_train_data, tictactoe_test_data, training_cfg, model_size_to_epochs, get_model_config) -> None:
     for model_size in ["nano", "micro", "mini", "small", "medium", "large"]:
         for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
             matching_files = load_model_get_matching_files(project_name, model_size, goal, experiment_folder)

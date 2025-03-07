@@ -5,13 +5,12 @@ from tqdm.notebook import tqdm
 from torch.nn.functional import cross_entropy, softmax
 import wandb
 from datetime import datetime
-
-from torchtyping import Float
+from jaxtyping import Float
+from transformer_lens import HookedTransformerConfig, HookedTransformer
 
 from wsg_games.tictactoe.evals import evaluate_predictions, sample_games, eval_model
 from wsg_games.tictactoe.data import TicTacToeData, random_sample_tictactoe_data
-from wsg_games.tictactoe.model import HookedTransformer
-from wsg_games.tictactoe.goal import Goal
+from wsg_games.tictactoe.game import Goal
 
 def rearrange(tensor: t.Tensor) -> t.Tensor:
     """
@@ -22,7 +21,7 @@ def rearrange(tensor: t.Tensor) -> t.Tensor:
     return einops.rearrange(tensor, "batch seq token -> (batch seq) token")
 
 
-def log_epoch_wandb(logits: Float[t.acosTensor, "n_games game_length n_tokens"], data: TicTacToeData, loss_fn, folder) -> None:
+def log_epoch_wandb(logits: Float[t.Tensor, "n_games game_length n_tokens"], data: TicTacToeData, loss_fn, folder) -> None:
   res = {}
   flat_logits = rearrange(logits)
   flat_weak_labels = rearrange(data.weak_goals_labels)

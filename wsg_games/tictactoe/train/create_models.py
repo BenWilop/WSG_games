@@ -1,5 +1,5 @@
 from transformer_lens import HookedTransformerConfig, HookedTransformer
-
+import torch.nn as nn
 
 def format_integer_scientific(n: float) -> str:
     s = f"{n:.1e}"

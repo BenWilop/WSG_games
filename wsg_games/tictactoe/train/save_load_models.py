@@ -19,7 +19,7 @@ def save_model(model, run_id, project_name: str, experiment_name: str, experimen
     print(f"Model saved to {file_path}")
 
 
-def _load_model_get_matching_files(project_name: str, model_size: str, goal: Goal, experiment_folder: str):
+def load_model_get_matching_files(project_name: str, model_size: str, goal: Goal, experiment_folder: str):
     project_dir = f"{experiment_folder}/{project_name}"
     experiment_prefix = f"experiment_{model_size}_{str(goal)}_"
     pattern = os.path.join(project_dir, experiment_prefix + "*.pkl")
@@ -28,7 +28,7 @@ def _load_model_get_matching_files(project_name: str, model_size: str, goal: Goa
 
 
 def load_model(project_name: str, model_size: str, goal: Goal, experiment_folder: str) -> t.nn.Module:
-    matching_files = _load_model_get_matching_files(project_name, model_size, goal, experiment_folder)
+    matching_files = load_model_get_matching_files(project_name, model_size, goal, experiment_folder)
 
     if not matching_files:
         print(f"No model files found for size {model_size} and goal {goal}")
