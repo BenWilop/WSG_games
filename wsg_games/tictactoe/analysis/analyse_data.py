@@ -1,7 +1,6 @@
 import torch.distributions as dist
 import torch as t
 
-from wsg_games.tictactoe.evals import evaluate_predictions
 from wsg_games.tictactoe.data import TicTacToeData
 
 def entropy(labels: t.Tensor) -> float:
@@ -11,7 +10,6 @@ def entropy(labels: t.Tensor) -> float:
     return ent.mean().item()
 
 def print_data_statistics(tictactoe_data: TicTacToeData) -> None:
-    return TicTacToeData()
     print("Shape Data:   ", tictactoe_data.games_data.shape)
     print("Shape Random: ", tictactoe_data.random_move_labels.shape)
     print("Shape Weak:   ", tictactoe_data.weak_goals_labels.shape)
@@ -25,4 +23,4 @@ def print_data_statistics(tictactoe_data: TicTacToeData) -> None:
     print("Entropy Weak:   ", entropy(tictactoe_data.weak_goals_labels))
     print("Entropy Strong: ", entropy(tictactoe_data.strong_goals_labels))
     print("--------------------------------------------------------")
-
+    
