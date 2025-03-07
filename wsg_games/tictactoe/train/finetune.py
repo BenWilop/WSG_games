@@ -7,7 +7,7 @@ import wandb
 from wsg_games.tictactoe.train.train import rearrange, log_generating_game_wandb, evaluate_model
 from wsg_games.tictactoe.data import random_sample_tictactoe_data
 
-def _quick_evaluation(name, model, test_data):
+def quick_evaluation(name, model, test_data):
     model.eval()
     with t.no_grad():
         test_sample = random_sample_tictactoe_data(test_data, 1000)

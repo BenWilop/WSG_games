@@ -6,7 +6,7 @@ from einops import rearrange
 
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.data import random_sample_tictactoe_data
-from wsg_games.tictactoe.train.train import run_full_training
+from wsg_games.tictactoe.train.train import run_full_training, rearrange
 from wsg_games.tictactoe.train.save_load_models import load_model, load_model_get_matching_files, save_model
 from wsg_games.tictactoe.train.create_models import count_parameters
 
