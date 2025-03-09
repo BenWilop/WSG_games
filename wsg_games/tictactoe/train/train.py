@@ -63,13 +63,13 @@ def evaluate_model(model, train_data, test_data, loss_fn, n_samples=100):
 
 def train_model(project_name: str, experiment_name: str, timestamp: str,
                 model, goal: Goal, optimizer, loss_fn,
-                train_data: TicTacToeData, test_data: TicTacToeData,
-                epochs: int, batch_size: int) -> None:
+                train_data: TicTacToeData, val_data: TicTacToeData, test_data: TicTacToeData,
+                max_epochs: int, early_stopping_patience: int, batch_size: int) -> None:
     """Log train + test ~ every 1000 datapoints and generation every 50000"""
     log_generating_game_wandb(model)
     evaluate_model(model, train_data, test_data, loss_fn)
 
-    # Dataloader for minibatches and shuffling
+    # Dataloaders for minibatches and shuffling
     train_dataset = TensorDataset(
         train_data.games_data,
         train_data.random_move_labels,
@@ -77,9 +77,16 @@ def train_model(project_name: str, experiment_name: str, timestamp: str,
         train_data.strong_goals_labels
     )
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+    # Early stopping
+    best_val_loss = float('inf')    
+    patience_counter = 0     
+    best_epoch = 0       
+    best_model_state = None        
+
     n_datapoints_since_last_evaluation = 0
     n_datapoints_since_last_generation_evaluation = 0
-    for epoch in tqdm(range(epochs), desc="Training epochs", position=0, dynamic_ncols=True):
+    for epoch in tqdm(range(max_epochs), desc="Training epochs", position=0, dynamic_ncols=True):
         # -------------------------
         # Training Phase (mini-batch loop)
         # -------------------------
@@ -110,11 +117,40 @@ def train_model(project_name: str, experiment_name: str, timestamp: str,
                 n_datapoints_since_last_generation_evaluation = 0
                 log_generating_game_wandb(model)
 
+        # Early stopping
+        with t.no_grad():
+            match goal:
+                case Goal.WEAK_GOAL:
+                    labels = val_data.weak_goals_labels
+                case Goal.STRONG_GOAL:
+                    labels = val_data.strong_goals_labels
+                case _:
+                    raise ValueError(f"Unexpected goal {goal}")
+            logits = model(val_data.games_data)
+            val_loss = loss_fn(rearrange(logits), rearrange(labels)).item()
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_model_state = model.state_dict()  # checkpoint best model
+                best_epoch = epoch
+                patience_counter = 0
+            else:
+                patience_counter += 1
 
-def run_full_training(project_name, model_size: str, goal: Goal, train_data, test_data, training_cfg: dict, model_cfg: dict) -> None:
+            wandb.log({"val/val_loss": val_loss, "val/best_epoch": best_epoch})
+
+            if patience_counter >= early_stopping_patience:
+                print(f"Early stopping triggered at epoch {epoch}")
+                break
+    
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+        
+
+def run_full_training(project_name, model_size: str, goal: Goal, train_data, val_data, test_data, training_cfg: dict, model_cfg: dict) -> None:
     lr = training_cfg.get("learning_rate")
     weight_decay = training_cfg.get("weight_decay")
-    epochs = training_cfg.get("epochs")
+    max_epochs = training_cfg.get("max_epochs")
+    early_stopping_patience = training_cfg.get("early_stopping_patience")
     batch_size = training_cfg.get("batch_size")
 
     model = HookedTransformer(model_cfg).to(model_cfg.device)
@@ -124,6 +160,9 @@ def run_full_training(project_name, model_size: str, goal: Goal, train_data, tes
     wandb.finish()  # In case previous run did not get finished
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     experiment_name = f"experiment_{model_size}_{str(goal)}_{timestamp}"
+    n_train_data = len(train_data.games_data)
+    n_val_data = len(val_data.games_data)
+    n_test_data = len(test_data.games_data)
     wandb.init(
         project=project_name,
         name=experiment_name,
@@ -131,14 +170,17 @@ def run_full_training(project_name, model_size: str, goal: Goal, train_data, tes
             "transformer_config": model_cfg.to_dict(),
             "learning_rate": lr,
             "weight_decay": weight_decay,
-            "test_train_split": len(train_data.games_data) / (len(train_data.games_data) + len(test_data.games_data)),
-            "epochs": epochs,
+            "n_train_data": n_train_data,
+            "n_val_data": n_val_data,
+            "n_test_data": n_test_data,
+            "max_epochs": max_epochs,
+            "early_stopping_patience": early_stopping_patience,
             "batch_size": batch_size,
         })
     run_id = wandb.run.id
     train_model(project_name, experiment_name, timestamp,
         model, goal, optimizer, loss_fn,
-        train_data, test_data, training_cfg.get("epochs"), batch_size=batch_size)
+        train_data, val_data, test_data, max_epochs, early_stopping_patience, batch_size=batch_size)
 
     wandb.finish()
 
