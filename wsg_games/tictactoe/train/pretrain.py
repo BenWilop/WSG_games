@@ -92,7 +92,7 @@ def plot_loss_pretrain_models(experiment_folder, project_name, test_data):
     ax.plot(data_by_goal[Goal.STRONG_GOAL]["params"], data_by_goal[Goal.STRONG_GOAL]["random_loss"], 'o-', label="Random CE Loss")
     ax.plot(data_by_goal[Goal.STRONG_GOAL]["params"], data_by_goal[Goal.STRONG_GOAL]["weak_loss"], 's-', label="Weak CE Loss")
     ax.plot(data_by_goal[Goal.STRONG_GOAL]["params"], data_by_goal[Goal.STRONG_GOAL]["strong_loss"], 'd-', label="Strong CE Loss")
-    ax.axhline(y=minimal_loss_strong, color='gray', linestyle='--', label="Min Achievable StrongLoss")
+    ax.axhline(y=minimal_loss_strong, color='gray', linestyle='--', label="Min Achievable Strong Loss")
 
     ax.set_xscale('log')
     ax.set_ylim(0, 6.5)
