@@ -54,24 +54,16 @@ def _get_label_tensor(seq, cache, compute_moves_fn):
     label_tensor = t.tensor(label_vector, requires_grad=False)
     return label_tensor / t.sum(label_tensor)
 
-def calculate_tictactoe_data() -> TicTacToeData:
-    games = generate_all_games([Board()])
-    games_tensor = t.tensor(
-        [
-            [10] + game.moves_played + ([9] * (10 - len(game.moves_played)))
-            for game in games
-        ],
-        requires_grad=False,
-    )
+def label_games_tensor(games_tensor: t.Tensor) -> TicTacToeData:
     games_data = games_tensor[:, :-1]
-    random_labels_all: list[Float[Tensor, "game_length n_tokens"]] = []
+    random_labels_all = []
     weak_labels_all = []
     strong_labels_all = []
-    cache_random_label: dict["str", list[int]] = {}  # game sequence -> result of _next_possible_moves
+    cache_random_label = {}
     cache_weak_label = {}
     cache_strong_label = {}
-    for game in tqdm(games_data):
-        random_label: list[Float[Tensor, "n_tokens"]] = []
+    for game in tqdm(games_data, desc="Labeling games"):
+        random_label = []
         weak_label = []
         strong_label = []
         for idx in range(len(game)):
@@ -95,6 +87,40 @@ def calculate_tictactoe_data() -> TicTacToeData:
         weak_goals_labels=t.stack(weak_labels_all),
         strong_goals_labels=t.stack(strong_labels_all),
     )
+
+
+def calculate_tictactoe_data() -> TicTacToeData:
+    games = generate_all_games([Board()])
+    games_tensor = t.tensor(
+        [
+            [10] + game.moves_played + ([9] * (10 - len(game.moves_played)))
+            for game in games
+        ],
+        requires_grad=False,
+    )
+    return label_games_tensor(games_tensor)
+
+
+def calculate_tictactoe_data_random(n_samples: int) -> TicTacToeData:
+    games = []
+    for _ in tqdm(range(n_samples), desc="Generating random games"):
+        board = Board()
+        while board.game_state == State.ONGOING:
+            legal_moves = board.get_possible_moves()
+            if not legal_moves:
+                break
+            move = np.random.choice(legal_moves)
+            board.make_move(move)
+        games.append(board)
+    games_tensor = t.tensor(
+        [
+            [10] + game.moves_played + ([9] * (10 - len(game.moves_played)))
+            for game in games
+        ],
+        requires_grad=False,
+    )
+    return label_games_tensor(games_tensor)
+
 
 def train_test_split_tictactoe(
     tictactoe_data: TicTacToeData,
@@ -183,6 +209,30 @@ def cache_tictactoe_data(path: str) -> TicTacToeData:
         return data
     else:
         data = calculate_tictactoe_data()
+        with open(path, 'wb') as f:
+            pickle.dump(data, f)
+        return data
+
+def cache_tictactoe_data_(path: str) -> TicTacToeData:
+    if os.path.exists(path):
+        with open(path, 'rb') as f:
+            data = pickle.load(f)
+        assert isinstance(data, TicTacToeData), f"Data loaded from {path} is not a TicTacToeData object"
+        return data
+    else:
+        data = calculate_tictactoe_data()
+        with open(path, 'wb') as f:
+            pickle.dump(data, f)
+        return data
+
+def cache_tictactoe_data_random(path: str) -> TicTacToeData:
+    if os.path.exists(path):
+        with open(path, 'rb') as f:
+            data = pickle.load(f)
+        assert isinstance(data, TicTacToeData), f"Data loaded from {path} is not a TicTacToeData object"
+        return data
+    else:
+        data = calculate_tictactoe_data_random(100000)
         with open(path, 'wb') as f:
             pickle.dump(data, f)
         return data
