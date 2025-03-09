@@ -98,40 +98,45 @@ def calculate_tictactoe_data() -> TicTacToeData:
 
 def train_test_split_tictactoe(
     tictactoe_data: TicTacToeData,
-    split_ratio: float = 0.8,
+    train_ratio: float,
+    val_ratio: float,
+    test_ratio: float,
     device: str | None = None,
     seed: int | None = None,
 ):
+    if abs(train_ratio + val_ratio + test_ratio - 1.0) > 1e-6:
+        raise ValueError("Train, validation and test ratios must add up to 1.")
     if seed is not None:
         t.random.manual_seed(seed)
-
-    # Check that data is coeherent
-    assert 0 <= split_ratio <= 1
     n_games = tictactoe_data.games_data.shape[0]
-    assert n_games == len(tictactoe_data.random_move_labels)
-    assert n_games == len(tictactoe_data.weak_goals_labels)
-    assert n_games == len(tictactoe_data.strong_goals_labels)
-
-    # Indices
     inds = t.randperm(n_games)
-    split = math.floor(split_ratio * n_games)
-    train_inds, test_inds = inds[:split], inds[split:]
+    n_train = math.floor(train_ratio * n_games)
+    n_val = math.floor(val_ratio * n_games)
+    train_inds = inds[:n_train]
+    val_inds = inds[n_train:n_train + n_val]
+    test_inds = inds[n_train + n_val:]
 
-    # Data
-    games_train = tictactoe_data.games_data[train_inds]
-    random_train = tictactoe_data.random_move_labels[train_inds]
-    weak_train = tictactoe_data.weak_goals_labels[train_inds]
-    strong_train = tictactoe_data.strong_goals_labels[train_inds]
-    games_test = tictactoe_data.games_data[test_inds]
-    random_test = tictactoe_data.random_move_labels[test_inds]
-    weak_test = tictactoe_data.weak_goals_labels[test_inds]
-    strong_test = tictactoe_data.strong_goals_labels[test_inds]
+    def split_data(indices):
+        return (
+            tictactoe_data.games_data[indices],
+            tictactoe_data.random_move_labels[indices],
+            tictactoe_data.weak_goals_labels[indices],
+            tictactoe_data.strong_goals_labels[indices],
+        )
+
+    games_train, random_train, weak_train, strong_train = split_data(train_inds)
+    games_val, random_val, weak_val, strong_val = split_data(val_inds)
+    games_test, random_test, weak_test, strong_test = split_data(test_inds)
 
     if device is not None:
         games_train = games_train.to(device)
         random_train = random_train.to(device)
         weak_train = weak_train.to(device)
         strong_train = strong_train.to(device)
+        games_val = games_val.to(device)
+        random_val = random_val.to(device)
+        weak_val = weak_val.to(device)
+        strong_val = strong_val.to(device)
         games_test = games_test.to(device)
         random_test = random_test.to(device)
         weak_test = weak_test.to(device)
@@ -143,13 +148,20 @@ def train_test_split_tictactoe(
         weak_goals_labels=weak_train,
         strong_goals_labels=strong_train,
     )
+    val_data = TicTacToeData(
+        games_data=games_val,
+        random_move_labels=random_val,
+        weak_goals_labels=weak_val,
+        strong_goals_labels=strong_val,
+    )
     test_data = TicTacToeData(
         games_data=games_test,
         random_move_labels=random_test,
         weak_goals_labels=weak_test,
         strong_goals_labels=strong_test,
     )
-    return train_data, test_data
+    return train_data, val_data, test_data
+
 
 def random_sample_tictactoe_data(tictactoe_data: TicTacToeData, n_samples: int) -> TicTacToeData:
     n_games = len(tictactoe_data.games_data)
