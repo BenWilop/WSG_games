@@ -25,8 +25,8 @@ def pretrain_models(experiment_folder:str, project_name: str, tictactoe_train_da
 
 
 def plot_loss_pretrain_models(experiment_folder, project_name, test_data):
-    minimal_loss_weak = 0.6724082827568054
-    minimal_loss_strong = 0.5945572853088379
+    minimal_loss_weak = 0.6561687588691711
+    minimal_loss_strong = 0.5871079564094543
 
     # Initialize dictionaries to store the data for each goal type.
     data_by_goal = {
