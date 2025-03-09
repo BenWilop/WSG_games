@@ -11,16 +11,13 @@ from wsg_games.tictactoe.train.save_load_models import load_model, load_model_ge
 from wsg_games.tictactoe.train.create_models import count_parameters
 
 
-def pretrain_models(experiment_folder:str, project_name: str, tictactoe_train_data, tictactoe_val_data, tictactoe_test_data, training_cfg, model_size_to_epochs, get_model_config) -> None:
+def pretrain_models(experiment_folder:str, project_name: str, tictactoe_train_data, tictactoe_val_data, tictactoe_test_data, training_cfg, get_model_config) -> None:
     for model_size in ["nano", "micro", "mini", "small", "medium", "large"]:
         for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
             matching_files = load_model_get_matching_files(project_name, model_size, goal, experiment_folder)
             if not matching_files:
-                adapted_training_cfg = deepcopy(training_cfg)
-                adapted_training_cfg["epochs"] = model_size_to_epochs[model_size]
-
                 model_cfg = get_model_config(model_size)
-                model, experiment_name, run_id = run_full_training(project_name, model_size, goal, tictactoe_train_data, tictactoe_val_data, tictactoe_test_data, adapted_training_cfg, model_cfg)
+                model, experiment_name, run_id = run_full_training(project_name, model_size, goal, tictactoe_train_data, tictactoe_val_data, tictactoe_test_data, training_cfg, model_cfg)
                 save_model(model, run_id, project_name, experiment_name, experiment_folder)
                 model.cpu()
                 del model
