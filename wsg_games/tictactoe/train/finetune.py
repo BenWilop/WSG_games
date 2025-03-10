@@ -76,6 +76,11 @@ def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_
     )
     run_id = wandb.run.id
 
+    alpha = None # 0.7
+    temperature = 2
+    print("alpha: ", alpha)
+    print("temperature: ", temperature)
+
     # Finetuning loop: train strong_model to match the weak_model predictions
     log_generating_game_wandb(strong_model)
     evaluate_model(strong_model, train_data, test_data, loss_fn)
@@ -90,6 +95,12 @@ def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_
         for games, labels in tqdm(train_loader, desc="Training batches", leave=False, position=1, dynamic_ncols=True):
             optimizer.zero_grad()
             logits = strong_model(games)
+
+            # confidence loss
+            if alpha:
+                strong_model_predictions = softmax(logits / temperature, dim=-1)
+                labels = alpha*labels + (1-alpha)*strong_model_predictions
+
             loss = loss_fn(rearrange(logits), rearrange(labels))
             loss.backward()
             optimizer.step()
@@ -104,3 +115,7 @@ def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_
             if n_datapoints_since_last_generation_evaluation > 10000:
                 n_datapoints_since_last_generation_evaluation = 0
                 log_generating_game_wandb(strong_model)
+
+
+
+
