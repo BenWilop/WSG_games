@@ -77,22 +77,26 @@ class Board:
             self.game_state = State.ONGOING
     
     def get_winner(self, goal: Goal) -> Player | None:
-        _, terminating_player = self.get_termination_conditions()
+        termination_conditions, terminating_player = self.get_termination_conditions()
         match goal:
             case Goal.WEAK_GOAL:
                 return terminating_player
             case Goal.STRONG_GOAL:
-                match terminating_player:
-                    case None:
-                        return None
-                    case Player.X:
-                        return Player.O
-                    case Player.O:
-                        return Player.X
-                    case _:
-                        raise ValueError(f"Unexpected terminating_player {terminating_player}")
+                if ("top left -> bottom right" in termination_conditions or
+                "bottom left -> top right" in termination_conditions):
+                    match terminating_player:
+                        case None:
+                            return None
+                        case Player.X:
+                            return Player.O
+                        case Player.O:
+                            return Player.X
+                        case _:
+                            raise ValueError(f"Unexpected terminating_player {terminating_player}")
+                else:
+                    return terminating_player
             case _:
-                raise ValueError(f"Unexpected goal {goal}")
+                raise ValueError(f"Unexpected goal {goal}") 
         
     def get_possible_moves(self) -> list[int]:
         match self.game_state:
