@@ -122,7 +122,7 @@ def calculate_tictactoe_data_random(n_samples: int) -> TicTacToeData:
     return label_games_tensor(games_tensor)
 
 
-def split_data_by_indices(tictactoe_data, train_inds, val_inds, test_inds, device=None):
+def split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_inds, test_inds, device=None):
     def to_device(data):
         return data.to(device) if device else data
 
@@ -137,12 +137,13 @@ def split_data_by_indices(tictactoe_data, train_inds, val_inds, test_inds, devic
     train_data = build_dataset(train_inds)
     val_data = build_dataset(val_inds)
     test_data = build_dataset(test_inds)
+    weak_finetune_data = build_dataset(weak_finetune_inds)
 
-    return train_data, val_data, test_data
+    return train_data, weak_finetune_data, val_data, test_data
 
 
-def train_test_split_tictactoe_first(tictactoe_data, train_ratio, val_ratio, test_ratio, device=None, seed=None):
-    if abs(train_ratio + val_ratio + test_ratio - 1.0) > 1e-6:
+def train_test_split_tictactoe_first(tictactoe_data, train_ratio, weak_finetune_ratio, val_ratio, test_ratio, device=None, seed=None):
+    if abs(train_ratio + weak_finetune_ratio + val_ratio + test_ratio - 1.0) > 1e-6:
         raise ValueError("Train/Val/Test ratios must sum to 1.")
 
     num_games = len(tictactoe_data.games_data)
@@ -150,35 +151,45 @@ def train_test_split_tictactoe_first(tictactoe_data, train_ratio, val_ratio, tes
     inds = t.randperm(num_games, generator=t.Generator().manual_seed(seed))
 
     n_train = int(train_ratio * num_games)
+    n_finetune = int(weak_finetune_ratio * num_games)
     n_val = int(val_ratio * num_games)
 
-    train_inds = inds[:n_train]
-    val_inds = inds[n_train:n_train + n_val]
-    test_inds = inds[n_train + n_val:]
+    n_1 = n_train
+    n_2 = n_1 + n_finetune
+    n_3 = n_2 + n_val
+    train_inds = inds[:n_1]
+    weak_finetune_inds = inds[n_1:n_2]
+    val_inds = inds[n_2:n_3]
+    test_inds = inds[n_3:]
 
-    return split_data_by_indices(tictactoe_data, train_inds, val_inds, test_inds)
+    return split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_inds, test_inds)
 
 
-def train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, n_first_two_train, n_first_two_val, n_first_two_test, device=None, seed=None):
-    if n_first_two_train + n_first_two_val + n_first_two_test != 72:
+def train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, n_first_two_train, n_first_two_weak_finetune, n_first_two_val, n_first_two_test, device=None, seed=None):
+    if n_first_two_train + n_first_two_weak_finetune + n_first_two_val + n_first_two_test != 72:
         raise ValueError("The sum of first-two-move splits must equal 72.")
 
     unique_first_two_moves = t.unique(tictactoe_data.games_data[:, :3], dim=0)
     shuffled_indices = t.randperm(len(unique_first_two_moves), generator=t.Generator().manual_seed(seed))
 
-    train_first_two_moves = unique_first_two_moves[shuffled_indices[:n_first_two_train]]
-    val_first_two_moves = unique_first_two_moves[shuffled_indices[n_first_two_train:n_first_two_train + n_first_two_val]]
-    test_first_two_moves = unique_first_two_moves[shuffled_indices[n_first_two_train + n_first_two_val:]]
+    n_1 = n_first_two_train
+    n_2 = n_1 + n_first_two_weak_finetune
+    n_3 = n_2 + n_first_two_val
+    train_first_two_moves = unique_first_two_moves[shuffled_indices[:n_1]]
+    weak_finetune_first_two_moves = unique_first_two_moves[shuffled_indices[n_1:n_2]]
+    val_first_two_moves = unique_first_two_moves[shuffled_indices[n_2:n_3]]
+    test_first_two_moves = unique_first_two_moves[shuffled_indices[n_3:]]
 
     def indices_for_first_two_moves(first_two_moves):
         mask = (tictactoe_data.games_data[:, None, :3] == first_two_moves[None, :, :]).all(dim=2).any(dim=1)
         return mask.nonzero().flatten()
 
     train_inds = indices_for_first_two_moves(train_first_two_moves)
+    weak_finetune_inds = indices_for_first_two_moves(weak_finetune_first_two_moves)
     val_inds = indices_for_first_two_moves(val_first_two_moves)
     test_inds = indices_for_first_two_moves(test_first_two_moves)
 
-    return split_data_by_indices(tictactoe_data, train_inds, val_inds, test_inds, device)
+    return split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_inds, test_inds, device)
 
 
 def random_sample_tictactoe_data(tictactoe_data: TicTacToeData, n_samples: int) -> TicTacToeData:

@@ -23,12 +23,25 @@ def pretrain_models(experiment_folder:str, project_name: str, tictactoe_train_da
                 del model
                 t.cuda.empty_cache()
 
+def compute_avg_loss(model, games_data, labels, batch_size=1000):
+    total_loss = 0.0
+    total_samples = 0
+
+    for i in range(0, len(games_data), batch_size):
+        batch_data = games_data[i : i + batch_size]
+        batch_labels = labels[i : i + batch_size]
+        logits = model(batch_data)
+
+        loss = cross_entropy(rearrange(logits), rearrange(batch_labels), reduction='sum')
+        total_loss += loss.item()
+        total_samples += len(rearrange(logits))
+
+    return total_loss / total_samples
 
 def plot_loss_pretrain_models(experiment_folder, project_name, test_data):
     minimal_loss_weak = 0.6561687588691711
     minimal_loss_strong = 0.5871079564094543
 
-    # Initialize dictionaries to store the data for each goal type.
     data_by_goal = {
         Goal.WEAK_GOAL: {
             "params": [],
@@ -44,8 +57,7 @@ def plot_loss_pretrain_models(experiment_folder, project_name, test_data):
         }
     }
 
-    # Iterate over model sizes and both goal types.
-    for model_size in ["nano", "micro", "mini", "small", "medium", "large", "huge", "gigantic"]: 
+    for model_size in ["nano", "micro", "mini", "small", "medium", "large", "huge", "gigantic"]:
         for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
             model = load_model(project_name, model_size, goal, experiment_folder)
             if not model:
@@ -53,21 +65,23 @@ def plot_loss_pretrain_models(experiment_folder, project_name, test_data):
 
             # Evaluate
             n_parameters = count_parameters(model)
-            test_sample = random_sample_tictactoe_data(test_data, 1000)
-            test_logits = model(test_sample.games_data)
-            random_loss = cross_entropy(rearrange(test_logits), rearrange(test_sample.random_move_labels)).item()
-            weak_loss   = cross_entropy(rearrange(test_logits), rearrange(test_sample.weak_goals_labels)).item()
-            strong_loss = cross_entropy(rearrange(test_logits), rearrange(test_sample.strong_goals_labels)).item()
+            test_sample = random_sample_tictactoe_data(test_data, 10000)
+            
+            avg_random_loss = compute_avg_loss(model, test_sample.games_data, test_sample.random_move_labels)
+            avg_weak_loss   = compute_avg_loss(model, test_sample.games_data, test_sample.weak_goals_labels)
+            avg_strong_loss = compute_avg_loss(model, test_sample.games_data, test_sample.strong_goals_labels)
 
-            # Save the computed values in the appropriate goal category
             data_by_goal[goal]["params"].append(n_parameters)
-            data_by_goal[goal]["random_loss"].append(random_loss)
-            data_by_goal[goal]["weak_loss"].append(weak_loss)
-            data_by_goal[goal]["strong_loss"].append(strong_loss)
+            data_by_goal[goal]["random_loss"].append(avg_random_loss)
+            data_by_goal[goal]["weak_loss"].append(avg_weak_loss)
+            data_by_goal[goal]["strong_loss"].append(avg_strong_loss)
 
+            # Clean memory
             model.cpu()
             del model
             t.cuda.empty_cache()
+
+    print(data_by_goal)
 
     # Create a figure with two subplots (side-by-side)
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))

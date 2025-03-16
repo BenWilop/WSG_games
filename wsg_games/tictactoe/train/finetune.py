@@ -10,7 +10,7 @@ from wsg_games.tictactoe.data import random_sample_tictactoe_data
 def quick_evaluation(name, model, test_data):
     model.eval()
     with t.no_grad():
-        test_sample = random_sample_tictactoe_data(test_data, 1000)
+        test_sample = random_sample_tictactoe_data(test_data, 20000)
         test_logits = model(test_sample.games_data)
         weak_loss   = cross_entropy(rearrange(test_logits), rearrange(test_sample.weak_goals_labels)).item()
         strong_loss = cross_entropy(rearrange(test_logits), rearrange(test_sample.strong_goals_labels)).item()
@@ -40,7 +40,7 @@ def evaluate_model_finetuning(model, train_games, train_labels, test_games, test
     })
 
 
-def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_model, train_data, test_data, training_cfg: dict):
+def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_model, weak_train_data, test_data, training_cfg: dict):
     lr = training_cfg.get("learning_rate")
     weight_decay = training_cfg.get("weight_decay")
     epochs = training_cfg.get("epochs")
@@ -49,15 +49,15 @@ def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_
     # Compute weak labels using weak_model predictions
     weak_model.eval()
     with t.no_grad():
-        train_logits = weak_model(train_data.games_data)
+        train_logits = weak_model(weak_train_data.games_data)
         train_weak_labels = softmax(train_logits, dim=-1)
         # train_weak_labels = F.one_hot(train_logits.argmax(dim=-1), num_classes=train_logits.shape[-1]).float()
-        # train_weak_labels = F.one_hot(train_data.weak_goals_labels.argmax(dim=-1), num_classes=train_logits.shape[-1]).float()
+        # train_weak_labels = F.one_hot(weak_train_data.weak_goals_labels.argmax(dim=-1), num_classes=train_logits.shape[-1]).float()
         test_logits = weak_model(test_data.games_data)
         test_weak_labels = softmax(test_logits, dim=-1) 
         # test_weak_labels = F.one_hot(test_logits.argmax(dim=-1), num_classes=test_logits.shape[-1]).float()
 
-    train_dataset = TensorDataset(train_data.games_data, train_weak_labels)
+    train_dataset = TensorDataset(weak_train_data.games_data, train_weak_labels)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     loss_fn = cross_entropy
@@ -76,15 +76,10 @@ def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_
     )
     run_id = wandb.run.id
 
-    alpha = None  # 0.7
-    temperature = 1
-    print("alpha: ", alpha)
-    print("temperature: ", temperature)
-
     # Finetuning loop: train strong_model to match the weak_model predictions
     log_generating_game_wandb(strong_model)
-    evaluate_model(strong_model, train_data, test_data, loss_fn, n_samples=20000)
-    evaluate_model_finetuning(strong_model, train_data.games_data, train_weak_labels, test_data.games_data, test_weak_labels, loss_fn)
+    evaluate_model(strong_model, weak_train_data, test_data, loss_fn, n_samples=20000)
+    evaluate_model_finetuning(strong_model, weak_train_data.games_data, train_weak_labels, test_data.games_data, test_weak_labels, loss_fn)
     n_datapoints_since_last_evaluation = 0
     n_datapoints_since_last_generation_evaluation = 0
     for epoch in tqdm(range(epochs), desc="Training epochs", position=0, dynamic_ncols=True):
@@ -96,11 +91,6 @@ def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_
             optimizer.zero_grad()
             logits = strong_model(games)
 
-            # confidence loss
-            if alpha:
-                strong_model_predictions = softmax(logits / temperature, dim=-1)
-                labels = alpha*labels + (1-alpha)*strong_model_predictions
-
             loss = loss_fn(rearrange(logits), rearrange(labels))
             loss.backward()
             optimizer.step()
@@ -108,8 +98,8 @@ def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_
             n_datapoints_since_last_evaluation += batch_size
             if n_datapoints_since_last_evaluation > 0:
                 n_datapoints_since_last_evaluation = 0
-                evaluate_model(strong_model, train_data, test_data, loss_fn, n_samples=20000)
-                evaluate_model_finetuning(strong_model, train_data.games_data, train_weak_labels, test_data.games_data, test_weak_labels, loss_fn)
+                evaluate_model(strong_model, weak_train_data, test_data, loss_fn, n_samples=20000)
+                evaluate_model_finetuning(strong_model, weak_train_data.games_data, train_weak_labels, test_data.games_data, test_weak_labels, loss_fn)
 
             n_datapoints_since_last_generation_evaluation += batch_size
             if n_datapoints_since_last_generation_evaluation > 10000:
