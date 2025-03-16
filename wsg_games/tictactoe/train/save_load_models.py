@@ -3,6 +3,7 @@ import sys
 import glob
 import torch as t
 from wsg_games.tictactoe.game import Goal
+from transformer_lens import HookedTransformer
 
 
 def save_model(model, run_id, project_name: str, experiment_name: str, experiment_folder: str) -> None:
@@ -37,5 +38,6 @@ def load_model(project_name: str, model_size: str, goal: Goal, experiment_folder
     # Pick the most recent file based on modification time.
     latest_file = max(matching_files, key=os.path.getmtime)
     print(f"Loading model from {latest_file}")
-    model = t.load(latest_file)
+    with t.serialization.safe_globals({HookedTransformer}):
+        model = t.load(latest_file, weights_only=False)
     return model
