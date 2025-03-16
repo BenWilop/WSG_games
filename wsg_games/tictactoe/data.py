@@ -122,71 +122,63 @@ def calculate_tictactoe_data_random(n_samples: int) -> TicTacToeData:
     return label_games_tensor(games_tensor)
 
 
-def train_test_split_tictactoe(
-    tictactoe_data: TicTacToeData,
-    train_ratio: float,
-    val_ratio: float,
-    test_ratio: float,
-    device: str | None = None,
-    seed: int | None = None,
-):
+def split_data_by_indices(tictactoe_data, train_inds, val_inds, test_inds, device=None):
+    def to_device(data):
+        return data.to(device) if device else data
+
+    def build_dataset(indices):
+        return TicTacToeData(
+            games_data=to_device(tictactoe_data.games_data[indices]),
+            random_move_labels=to_device(tictactoe_data.random_move_labels[indices]),
+            weak_goals_labels=to_device(tictactoe_data.weak_goals_labels[indices]),
+            strong_goals_labels=to_device(tictactoe_data.strong_goals_labels[indices]),
+        )
+
+    train_data = build_dataset(train_inds)
+    val_data = build_dataset(val_inds)
+    test_data = build_dataset(test_inds)
+
+    return train_data, val_data, test_data
+
+
+def train_test_split_tictactoe_first(tictactoe_data, train_ratio, val_ratio, test_ratio, device=None, seed=None):
     if abs(train_ratio + val_ratio + test_ratio - 1.0) > 1e-6:
-        raise ValueError("Train, validation and test ratios must add up to 1.")
-    if seed is not None:
-        t.random.manual_seed(seed)
-    n_games = tictactoe_data.games_data.shape[0]
-    inds = t.randperm(n_games)
-    n_train = math.floor(train_ratio * n_games)
-    n_val = math.floor(val_ratio * n_games)
+        raise ValueError("Train/Val/Test ratios must sum to 1.")
+
+    num_games = len(tictactoe_data.games_data)
+
+    inds = t.randperm(num_games, generator=t.Generator().manual_seed(seed))
+
+    n_train = int(train_ratio * num_games)
+    n_val = int(val_ratio * num_games)
+
     train_inds = inds[:n_train]
     val_inds = inds[n_train:n_train + n_val]
     test_inds = inds[n_train + n_val:]
 
-    def split_data(indices):
-        return (
-            tictactoe_data.games_data[indices],
-            tictactoe_data.random_move_labels[indices],
-            tictactoe_data.weak_goals_labels[indices],
-            tictactoe_data.strong_goals_labels[indices],
-        )
+    return split_data_by_indices(tictactoe_data, train_inds, val_inds, test_inds)
 
-    games_train, random_train, weak_train, strong_train = split_data(train_inds)
-    games_val, random_val, weak_val, strong_val = split_data(val_inds)
-    games_test, random_test, weak_test, strong_test = split_data(test_inds)
 
-    if device is not None:
-        games_train = games_train.to(device)
-        random_train = random_train.to(device)
-        weak_train = weak_train.to(device)
-        strong_train = strong_train.to(device)
-        games_val = games_val.to(device)
-        random_val = random_val.to(device)
-        weak_val = weak_val.to(device)
-        strong_val = strong_val.to(device)
-        games_test = games_test.to(device)
-        random_test = random_test.to(device)
-        weak_test = weak_test.to(device)
-        strong_test = strong_test.to(device)
+def train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, n_first_two_train, n_first_two_val, n_first_two_test, device=None, seed=None):
+    if n_first_two_train + n_first_two_val + n_first_two_test != 72:
+        raise ValueError("The sum of first-two-move splits must equal 72.")
 
-    train_data = TicTacToeData(
-        games_data=games_train,
-        random_move_labels=random_train,
-        weak_goals_labels=weak_train,
-        strong_goals_labels=strong_train,
-    )
-    val_data = TicTacToeData(
-        games_data=games_val,
-        random_move_labels=random_val,
-        weak_goals_labels=weak_val,
-        strong_goals_labels=strong_val,
-    )
-    test_data = TicTacToeData(
-        games_data=games_test,
-        random_move_labels=random_test,
-        weak_goals_labels=weak_test,
-        strong_goals_labels=strong_test,
-    )
-    return train_data, val_data, test_data
+    unique_first_two_moves = t.unique(tictactoe_data.games_data[:, :3], dim=0)
+    shuffled_indices = t.randperm(len(unique_first_two_moves), generator=t.Generator().manual_seed(seed))
+
+    train_first_two_moves = unique_first_two_moves[shuffled_indices[:n_first_two_train]]
+    val_first_two_moves = unique_first_two_moves[shuffled_indices[n_first_two_train:n_first_two_train + n_first_two_val]]
+    test_first_two_moves = unique_first_two_moves[shuffled_indices[n_first_two_train + n_first_two_val:]]
+
+    def indices_for_first_two_moves(first_two_moves):
+        mask = (tictactoe_data.games_data[:, None, :3] == first_two_moves[None, :, :]).all(dim=2).any(dim=1)
+        return mask.nonzero().flatten()
+
+    train_inds = indices_for_first_two_moves(train_first_two_moves)
+    val_inds = indices_for_first_two_moves(val_first_two_moves)
+    test_inds = indices_for_first_two_moves(test_first_two_moves)
+
+    return split_data_by_indices(tictactoe_data, train_inds, val_inds, test_inds, device)
 
 
 def random_sample_tictactoe_data(tictactoe_data: TicTacToeData, n_samples: int) -> TicTacToeData:

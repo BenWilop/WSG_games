@@ -49,7 +49,7 @@ def log_generating_game_wandb(model, n_samples=20):
     wandb.log(res)
 
 
-def evaluate_model(model, train_data, test_data, loss_fn, n_samples=100):
+def evaluate_model(model, train_data, test_data, loss_fn, n_samples=1000):
     model.eval()
     with t.no_grad():
         train_sample = random_sample_tictactoe_data(train_data, n_samples)
