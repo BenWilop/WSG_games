@@ -12,7 +12,7 @@ from wsg_games.tictactoe.train.create_models import count_parameters
 
 
 def pretrain_models(experiment_folder:str, project_name: str, tictactoe_train_data, tictactoe_val_data, tictactoe_test_data, training_cfg, get_model_config) -> None:
-    for model_size in ["nano", "micro", "mini", "small", "medium", "large"]:
+    for model_size in ["nano", "micro", "mini", "small", "medium", "large", "huge"]:
         for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
             matching_files = load_model_get_matching_files(project_name, model_size, goal, experiment_folder)
             if not matching_files:
@@ -45,7 +45,7 @@ def plot_loss_pretrain_models(experiment_folder, project_name, test_data):
     }
 
     # Iterate over model sizes and both goal types.
-    for model_size in ["nano", "micro", "mini", "small", "medium", "large"]: 
+    for model_size in ["nano", "micro", "mini", "small", "medium", "large", "huge", "gigantic"]: 
         for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
             model = load_model(project_name, model_size, goal, experiment_folder)
             if not model:

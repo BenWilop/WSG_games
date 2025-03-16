@@ -83,7 +83,7 @@ def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_
 
     # Finetuning loop: train strong_model to match the weak_model predictions
     log_generating_game_wandb(strong_model)
-    evaluate_model(strong_model, train_data, test_data, loss_fn, n_samples=25000)
+    evaluate_model(strong_model, train_data, test_data, loss_fn, n_samples=20000)
     evaluate_model_finetuning(strong_model, train_data.games_data, train_weak_labels, test_data.games_data, test_weak_labels, loss_fn)
     n_datapoints_since_last_evaluation = 0
     n_datapoints_since_last_generation_evaluation = 0
@@ -108,7 +108,7 @@ def finetune_strong_with_weak(project_name, experiment_name, weak_model, strong_
             n_datapoints_since_last_evaluation += batch_size
             if n_datapoints_since_last_evaluation > 0:
                 n_datapoints_since_last_evaluation = 0
-                evaluate_model(strong_model, train_data, test_data, loss_fn, n_samples=25000)
+                evaluate_model(strong_model, train_data, test_data, loss_fn, n_samples=20000)
                 evaluate_model_finetuning(strong_model, train_data.games_data, train_weak_labels, test_data.games_data, test_weak_labels, loss_fn)
 
             n_datapoints_since_last_generation_evaluation += batch_size
