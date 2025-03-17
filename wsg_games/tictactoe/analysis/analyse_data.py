@@ -12,7 +12,8 @@ from wsg_games.tictactoe.data import TicTacToeData
 
 def entropy(labels: t.Tensor) -> float:
     """Minimal achievable CE loss"""
-    distribution = dist.Categorical(probs=labels)
+    sliced_labels = labels[:, 3:, :]
+    distribution = dist.Categorical(probs=sliced_labels)
     ent = distribution.entropy()
     return ent.mean().item()
 
@@ -51,7 +52,6 @@ def calculate_leakage_percentage(train_data: TicTacToeData, test_data: TicTacToe
     """
     train_prefixes = get_all_prefixes(train_data.games_data)
     test_prefixes = get_all_prefixes(test_data.games_data)
-    leakage_pct = len(test_prefixes.intersection(train_prefixes)) / len(test_prefixes) * 100
     
     leaked = 0
     total = 0
@@ -59,13 +59,14 @@ def calculate_leakage_percentage(train_data: TicTacToeData, test_data: TicTacToe
     n_games, game_length = test_games.shape
     for i in range(n_games):
         game = test_games[i]
-        for l in range(1, game_length + 1):
+        for l in range(3, game_length + 1):
             total += 1
             prefix = tuple(game[:l].tolist())
             if prefix in train_prefixes:
                 leaked += 1
-    leakage_pct_weigted = (leaked / total) * 100
-    return leakage_pct_weigted, leakage_pct
+    leakage_pct = (leaked / total) * 100
+
+    return leakage_pct
 
 
 def get_bin_index(count: int, bin_edges: list[int]) -> int:

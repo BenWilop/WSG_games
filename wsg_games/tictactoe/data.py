@@ -235,7 +235,7 @@ def cache_tictactoe_data_random(path: str) -> TicTacToeData:
         assert isinstance(data, TicTacToeData), f"Data loaded from {path} is not a TicTacToeData object"
         return data
     else:
-        data = calculate_tictactoe_data_random(100000)
+        data = calculate_tictactoe_data_random(200000)
         with open(path, 'wb') as f:
             pickle.dump(data, f)
         return data

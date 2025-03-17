@@ -82,19 +82,35 @@ class Board:
             case Goal.WEAK_GOAL:
                 return terminating_player
             case Goal.STRONG_GOAL:
-                if ("top left -> bottom right" in termination_conditions or
-                "bottom left -> top right" in termination_conditions):
-                    match terminating_player:
-                        case None:
-                            return None
-                        case Player.X:
-                            return Player.O
-                        case Player.O:
-                            return Player.X
-                        case _:
-                            raise ValueError(f"Unexpected terminating_player {terminating_player}")
-                else:
-                    return terminating_player
+                ################################
+                #         No diagonals         #
+                ################################
+                # if ("top left -> bottom right" in termination_conditions or
+                # "bottom left -> top right" in termination_conditions):
+                #     match terminating_player:
+                #         case None:
+                #             return None
+                #         case Player.X:
+                #             return Player.O
+                #         case Player.O:
+                #             return Player.X
+                #         case _:
+                #             raise ValueError(f"Unexpected terminating_player {terminating_player}")
+                # else:
+                #     return terminating_player
+                ################################
+                #         Reverse rule         #
+                ################################
+                match terminating_player:
+                    case None:
+                        return None
+                    case Player.X:
+                        return Player.O
+                    case Player.O:
+                        return Player.X
+                    case _:
+                        raise ValueError(f"Unexpected terminating_player {terminating_player}")
+                ################################
             case _:
                 raise ValueError(f"Unexpected goal {goal}") 
         

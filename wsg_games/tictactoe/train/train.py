@@ -14,11 +14,13 @@ from wsg_games.tictactoe.game import Goal
 
 def rearrange(tensor: t.Tensor) -> t.Tensor:
     """
+    Prepares data from game dimensionality to 2D for evaluation.
+
     Flattens the first two dimensions (n_games and game_length) into one.
     This converts a tensor of shape [n_games, game_length, n_tokens]
     into [n_games * game_length, n_tokens] which is what F.cross_entropy expects.
     """
-    return einops.rearrange(tensor, "batch seq token -> (batch seq) token")
+    return einops.rearrange(tensor[:, 3:, :], "batch seq token -> (batch seq) token")
 
 
 def log_epoch_wandb(logits: Float[t.Tensor, "n_games game_length n_tokens"], data: TicTacToeData, loss_fn, folder) -> None:
@@ -118,6 +120,7 @@ def train_model(project_name: str, experiment_name: str, timestamp: str,
                 log_generating_game_wandb(model)
 
         # Early stopping
+        model.eval()
         with t.no_grad():
             match goal:
                 case Goal.WEAK_GOAL:
