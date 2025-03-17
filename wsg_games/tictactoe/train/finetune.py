@@ -168,7 +168,7 @@ def finetune_sweep(pretrained_project_name: str, finetuned_project_name: str, ex
                    weak_finetune_data: TicTacToeData, val_data: TicTacToeData, test_data: TicTacToeData,
                    training_cfg: dict):
     # model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
-    model_sizes = ["mini", "medium"]
+    model_sizes = ["micro", "mini", "small", "medium"]
     
     for i, weak_size in enumerate(model_sizes):
         weak_model = load_model(pretrained_project_name, weak_size, Goal.WEAK_GOAL, experiment_folder)
