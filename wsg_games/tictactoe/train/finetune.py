@@ -178,7 +178,9 @@ def finetune_sweep(pretrained_project_name: str, finetuned_project_name: str, ex
         for j in range(i + 1, len(model_sizes)):
             strong_size = model_sizes[j]
             matching_files = load_finetuned_model_get_matching_files(finetuned_project_name, weak_size, strong_size, experiment_folder)
-            if not matching_files:
+            if matching_files:
+                print(f"Finetuned {strong_size} to {weak_size} already exists. Skipping ...")
+            else:
                 strong_model = load_model(pretrained_project_name, strong_size, Goal.STRONG_GOAL, experiment_folder)
                 if not strong_model:
                     print(f"Strong model of size {strong_size} not found, skipping.")
