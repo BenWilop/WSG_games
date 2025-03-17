@@ -41,3 +41,23 @@ def load_model(project_name: str, model_size: str, goal: Goal, experiment_folder
     with t.serialization.safe_globals({HookedTransformer}):
         model = t.load(latest_file, weights_only=False)
     return model
+
+
+def load_finetuned_model_get_matching_files(project_name: str, weak_model_size: str, strong_model_size: str, experiment_folder: str):
+    project_dir = os.path.join(experiment_folder, project_name)
+    experiment_prefix = f"experiment_{weak_model_size}_{strong_model_size}_"
+    pattern = os.path.join(project_dir, experiment_prefix + "*.pkl")
+    matching_files = glob.glob(pattern)
+    return matching_files
+
+def load_finetuned_model(project_name: str, weak_model_size: str, strong_model_size: str):
+    matching_files = load_finetuned_model_get_matching_files(project_name, weak_model_size, strong_model_size, experiment_folder)
+    if not matching_files:
+        print(f"No finetuned model found for weak {weak_model_size} and strong {strong_model_size}")
+        return None
+    
+    # Return newest model
+    latest_file = max(matching_files, key=os.path.getmtime)
+    with t.serialization.safe_globals({HookedTransformer}):
+        finetuned_model = t.load(latest_file, weights_only=False)
+    return finetuned_model
