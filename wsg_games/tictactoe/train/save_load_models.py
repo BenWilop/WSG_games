@@ -50,7 +50,7 @@ def load_finetuned_model_get_matching_files(project_name: str, weak_model_size: 
     matching_files = glob.glob(pattern)
     return matching_files
 
-def load_finetuned_model(project_name: str, weak_model_size: str, strong_model_size: str):
+def load_finetuned_model(project_name: str, weak_model_size: str, strong_model_size: str, experiment_folder: str):
     matching_files = load_finetuned_model_get_matching_files(project_name, weak_model_size, strong_model_size, experiment_folder)
     if not matching_files:
         print(f"No finetuned model found for weak {weak_model_size} and strong {strong_model_size}")
