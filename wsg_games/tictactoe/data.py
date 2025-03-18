@@ -7,6 +7,7 @@ import torch as t
 from torch import Tensor
 from jaxtyping import Float
 from tqdm import tqdm
+import torch.nn.functional as F
 from dataclasses import dataclass
 
 from wsg_games.tictactoe.game import *
@@ -203,6 +204,37 @@ def random_sample_tictactoe_data(tictactoe_data: TicTacToeData, n_samples: int) 
         strong_goals_labels = tictactoe_data.strong_goals_labels[sample_inds]
     )
     return sampled_data
+
+
+
+def sample_hard_labels_from_soft(soft_labels: t.Tensor, num_samples) -> t.Tensor:
+    n_games, game_length, n_tokens = soft_labels.shape
+    soft_labels_flat = soft_labels.view(-1, n_tokens)
+    sampled_indices = t.multinomial(soft_labels_flat, num_samples=num_samples, replacement=True)
+
+    one_hot_samples = F.one_hot(sampled_indices, num_classes=n_tokens).float()
+    one_hot_samples = one_hot_samples.view(n_games, game_length, num_samples, n_tokens)
+    one_hot_samples = one_hot_samples.permute(0, 2, 1, 3)
+    new_hard_labels = one_hot_samples.reshape(n_games * num_samples, game_length, n_tokens)
+    return new_hard_labels
+
+def create_hard_label_tictactoe_data(data: TicTacToeData, num_samples, random_seed: int = 4567) -> TicTacToeData:
+    """
+    Samples for weak and strong goal one fixed trajectory.
+    The random samples stay the same to make it easier to check for illegal moves.
+    """
+    t.manual_seed(random_seed)
+    new_games_data = data.games_data.repeat_interleave(num_samples, dim=0)
+    new_weak_goals_labels  = sample_hard_labels_from_soft(data.weak_goals_labels, num_samples=num_samples)
+    new_strong_goals_labels = sample_hard_labels_from_soft(data.strong_goals_labels, num_samples=num_samples)
+    return TicTacToeData(
+        games_data=new_games_data,
+        random_move_labels=data.random_move_labels,
+        weak_goals_labels=new_weak_goals_labels,
+        strong_goals_labels=new_strong_goals_labels
+    )
+
+
 
 def cache_tictactoe_data(path: str) -> TicTacToeData:
     if os.path.exists(path):
