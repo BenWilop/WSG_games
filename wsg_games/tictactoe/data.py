@@ -22,6 +22,7 @@ class TicTacToeData:
 
 
 def _next_possible_moves(seq: list[int]) -> list[int]:
+    """List of all possible moves."""
     board = Board()
     for move in seq[1:]:
         try:
@@ -33,7 +34,9 @@ def _next_possible_moves(seq: list[int]) -> list[int]:
     else:
         return board.get_possible_moves()
 
+
 def _next_minimax_moves(seq: list[int], goal: Goal) -> list[int]:
+    """List of all moves that are optimal under a min-max algorithm optimizing goal."""
     board = Board()
     for move in seq[1:]:
         try:
@@ -45,7 +48,12 @@ def _next_minimax_moves(seq: list[int], goal: Goal) -> list[int]:
     else:
         return get_best_moves(board, goal)
     
+
 def _get_label_tensor(seq, cache, compute_moves_fn):
+    """
+    Helper method for label_games_tensor that computes the labels 
+    after a sequence of moves using a cache.
+    """
     seq_key: str = str(seq)
     if seq_key not in cache:
         cache[seq_key] = compute_moves_fn(seq)
@@ -55,7 +63,12 @@ def _get_label_tensor(seq, cache, compute_moves_fn):
     label_tensor = t.tensor(label_vector, requires_grad=False)
     return label_tensor / t.sum(label_tensor)
 
+
 def label_games_tensor(games_tensor: t.Tensor) -> TicTacToeData:
+    """
+    Given a tensor of games, creates labels for each move of each game 
+    for random, weak and strong goals.
+    """
     games_data = games_tensor[:, :-1]
     random_labels_all = []
     weak_labels_all = []
@@ -91,6 +104,7 @@ def label_games_tensor(games_tensor: t.Tensor) -> TicTacToeData:
 
 
 def calculate_tictactoe_data() -> TicTacToeData:
+    """Generate all possible games. This is the object that is used for training."""
     games = generate_all_games([Board()])
     games_tensor = t.tensor(
         [
@@ -103,6 +117,7 @@ def calculate_tictactoe_data() -> TicTacToeData:
 
 
 def calculate_tictactoe_data_random(n_samples: int) -> TicTacToeData:
+    """Generate n_samples random games. Only used for investigation because the games can have duplicates."""
     games = []
     for _ in tqdm(range(n_samples), desc="Generating random games"):
         board = Board()
@@ -124,6 +139,7 @@ def calculate_tictactoe_data_random(n_samples: int) -> TicTacToeData:
 
 
 def split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_inds, test_inds, device=None):
+    """Returns train, finetune, validation and test objects of TicTacToeData again."""
     def to_device(data):
         return data.to(device) if device else data
 
@@ -144,6 +160,7 @@ def split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_in
 
 
 def train_test_split_tictactoe_first(tictactoe_data, train_ratio, weak_finetune_ratio, val_ratio, test_ratio, device=None, seed=None):
+    """Randomly splits data."""
     if abs(train_ratio + weak_finetune_ratio + val_ratio + test_ratio - 1.0) > 1e-6:
         raise ValueError("Train/Val/Test ratios must sum to 1.")
 
@@ -167,6 +184,10 @@ def train_test_split_tictactoe_first(tictactoe_data, train_ratio, weak_finetune_
 
 
 def train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, n_first_two_train, n_first_two_weak_finetune, n_first_two_val, n_first_two_test, device=None, seed=None):
+    """
+    First randomly bins first two moves into train, weak finetune, val and test. 
+    Then selects all games with these first two moves.
+    """
     if n_first_two_train + n_first_two_weak_finetune + n_first_two_val + n_first_two_test != 72:
         raise ValueError("The sum of first-two-move splits must equal 72.")
 
@@ -194,6 +215,7 @@ def train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, n_firs
 
 
 def random_sample_tictactoe_data(tictactoe_data: TicTacToeData, n_samples: int) -> TicTacToeData:
+    """Random subsample, e.g. for evaluation."""
     n_games = len(tictactoe_data.games_data)
     assert 0 < n_samples <= n_games
     sample_inds = t.randperm(n_games)[:n_samples]
@@ -206,8 +228,8 @@ def random_sample_tictactoe_data(tictactoe_data: TicTacToeData, n_samples: int) 
     return sampled_data
 
 
-
 def sample_hard_labels_from_soft(soft_labels: t.Tensor, num_samples) -> t.Tensor:
+    """If multiple moves are possible, create labels that have exactly one of them a 1 and rest 0."""
     n_games, game_length, n_tokens = soft_labels.shape
     soft_labels_flat = soft_labels.view(-1, n_tokens)
     sampled_indices = t.multinomial(soft_labels_flat, num_samples=num_samples, replacement=True)
@@ -217,6 +239,7 @@ def sample_hard_labels_from_soft(soft_labels: t.Tensor, num_samples) -> t.Tensor
     one_hot_samples = one_hot_samples.permute(0, 2, 1, 3)
     new_hard_labels = one_hot_samples.reshape(n_games * num_samples, game_length, n_tokens)
     return new_hard_labels
+
 
 def create_hard_label_tictactoe_data(data: TicTacToeData, num_samples, random_seed: int = 4567) -> TicTacToeData:
     """
@@ -235,8 +258,8 @@ def create_hard_label_tictactoe_data(data: TicTacToeData, num_samples, random_se
     )
 
 
-
 def cache_tictactoe_data(path: str) -> TicTacToeData:
+    """calculate_tictactoe_data and save or load cache"""
     if os.path.exists(path):
         with open(path, 'rb') as f:
             data = pickle.load(f)
@@ -248,19 +271,9 @@ def cache_tictactoe_data(path: str) -> TicTacToeData:
             pickle.dump(data, f)
         return data
 
-def cache_tictactoe_data_(path: str) -> TicTacToeData:
-    if os.path.exists(path):
-        with open(path, 'rb') as f:
-            data = pickle.load(f)
-        assert isinstance(data, TicTacToeData), f"Data loaded from {path} is not a TicTacToeData object"
-        return data
-    else:
-        data = calculate_tictactoe_data()
-        with open(path, 'wb') as f:
-            pickle.dump(data, f)
-        return data
 
 def cache_tictactoe_data_random(path: str) -> TicTacToeData:
+    """calculate_tictactoe_data_random and save or load cache"""
     if os.path.exists(path):
         with open(path, 'rb') as f:
             data = pickle.load(f)
