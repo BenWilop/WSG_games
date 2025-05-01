@@ -15,7 +15,11 @@ from wsg_games.tictactoe.game import get_best_moves, Board, State
 
 
 def evaluate_predictions(predictions: Float[Tensor, "n_games game_length n_tokens"], tictactoe_data: TicTacToeData) -> dict[str, float]:
-    """Returns dictionary metric -> value"""
+    """
+    Returns dictionary metric -> value
+    weak_accuracy, strong_accuracy = percentage of moves where the model predicted one of the valid moves
+    illegal_move_chance
+    """
     res = {}
 
     # Pprediction is correct if the max token has a positive label.
@@ -39,6 +43,7 @@ def evaluate_predictions(predictions: Float[Tensor, "n_games game_length n_token
 def _sample_game(
     model: HookedTransformer, temp: float, probabilistic=False
 ) -> list[int]:
+    """Soft samples a move sequence autoregressivly from the model."""
     assert temp > 0
     seq = [10]
     # no grad
@@ -63,12 +68,14 @@ def sample_games(
 
 # evals return True on model error
 def _check_played_repeat_moves(game: list[int]) -> bool:
+    """True = bad (repeated move.)"""
     clean_game = [token for token in game if token != 9]
     set_length = len(set(clean_game))
     return set_length != len(clean_game)
 
 
 def _check_if_illegal_moves(game: list[int]) -> bool:
+    """True = bad (illegal move.)"""
     board = Board()
     for move in game[1:-1]:
         if board.game_state == State.ONGOING:
@@ -84,6 +91,7 @@ def _check_if_illegal_moves(game: list[int]) -> bool:
 
 
 def inappropriate_end_state(game: list[int]) -> bool:
+    """True = bad (game ongoing but end token occured or prior invalid move)"""
     board = Board()
     for move in game[1:]:
         if board.game_state == State.ONGOING and move == 9:
@@ -96,6 +104,7 @@ def inappropriate_end_state(game: list[int]) -> bool:
 
 
 def _check_played_after_game_ends(game: list[int]) -> bool:
+    """True = bad (game over but no end token or prior invalid move)"""
     board = Board()
     for move in game[1:]:
         if board.game_state == State.OVER and move != 9:
@@ -106,9 +115,14 @@ def _check_played_after_game_ends(game: list[int]) -> bool:
             return False
     return False
 
+
 def eval_model(
     games: list[list[int]], game_evals: bool = False
 ) -> dict[str, float] | tuple[dict[str, float], dict[int, dict[str, bool]]]:
+    """
+    Returns dictionary metric -> value
+    repreated_moves, played_after_game_ends, illegal_moves, inappropriate_end_state
+    """
     eval_fs = [
         _check_played_repeat_moves,
         _check_played_after_game_ends,

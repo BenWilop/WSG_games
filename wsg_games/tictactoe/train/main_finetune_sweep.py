@@ -1,15 +1,87 @@
-import multiprocessing
-from wsg_games.tictactoe.train.finetune import finetune_sweep_parallel
-from wsg_games.tictactoe.train.create_models import *
-from wsg_games.tictactoe.data import *
-from wsg_games.tictactoe.data import create_hard_label_tictactoe_data
+#!/usr/bin/env python3
+
+# python3 wsg_games/tictactoe/train/main_finetune_sweep.py
+import time
+import queue
+import copy
+import torch as t
+import torch.multiprocessing as mp
+from multiprocessing import Manager
+
+from wsg_games.tictactoe.train.finetune import finetune_strong_with_weak
+from wsg_games.tictactoe.train.save_load_models import (
+    load_model,
+    save_model,
+    load_finetuned_model_get_matching_files
+)
+from wsg_games.tictactoe.game import Goal
+from wsg_games.tictactoe.train.create_models import (
+    get_training_cfg,
+)
+from wsg_games.tictactoe.data import (
+    cache_tictactoe_data_random,
+    train_test_split_tictactoe_first_two_moves_no_overlap,
+    create_hard_label_tictactoe_data,
+)
+
+def worker(gpu_id: int,
+           pretrained_project_name, finetuned_project_name, experiment_folder,
+           weak_data, val_data, test_data, training_cfg,
+           task_queue):
+    # TODO pass device instead
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    t.cuda.set_device(0)
+    print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(0)}")
+
+    # bind this process to its GPU
+    # t.cuda.set_device(gpu_id)
+    # print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(gpu_id)}")
+
+    while True:
+        try:
+            weak_size, strong_size = task_queue.get_nowait()
+        except queue.Empty:
+            print(f"[Worker {gpu_id}] no more tasks, exiting.")
+            break
+
+        print(f"[Worker {gpu_id}] starting task {weak_size}→{strong_size}")
+        # skip if already done
+        if load_finetuned_model_get_matching_files(
+                finetuned_project_name, weak_size, strong_size, experiment_folder):
+            print(f"[Worker {gpu_id}] already finetuned {weak_size}→{strong_size}, skipping")
+            continue
+
+        # load pretrained weak & strong
+        weak_model = load_model(pretrained_project_name, weak_size, Goal.WEAK_GOAL, experiment_folder)
+        strong_model = load_model(pretrained_project_name, strong_size, Goal.STRONG_GOAL, experiment_folder)
+        if weak_model is None or strong_model is None:
+            print(f"[Worker {gpu_id}] missing pretrained model for {weak_size} or {strong_size}, skipping")
+            continue
+
+        # perform finetune
+        model_copy = copy.deepcopy(strong_model)
+        finetuned_model, exp_name, run_id = finetune_strong_with_weak(
+            finetuned_project_name,
+            weak_model, weak_size,
+            model_copy, strong_size,
+            weak_data, val_data, test_data,
+            training_cfg
+        )
+
+        # save
+        save_model(finetuned_model, run_id, finetuned_project_name, exp_name, experiment_folder)
+        print(f"[Worker {gpu_id}] finished {weak_size}→{strong_size} (run {run_id})")
+
+        # free GPU cache
+        t.cuda.empty_cache()
 
 
-if __name__ == "__main__":
-    # Set the start method to "spawn" to avoid CUDA re-initialization issues.
-    multiprocessing.set_start_method("spawn", force=True)
-
-    device = t.device("cpu")
+def main():
+    if t.cuda.is_available():
+        device = t.device("cuda")
+    else:
+        raise Exception("CUDA is not available.")
 
     pretrained_project_name = "tictactoe_pretrained_reverse_rule_no_overlap_split_start_third_200k"
     finetuned_project_name = "finetune_sweep_test_parallel"
@@ -17,20 +89,52 @@ if __name__ == "__main__":
     experiment_folder = '/homes/55/bwilop/wsg/experiments/'
 
     tictactoe_data = cache_tictactoe_data_random(data_folder + 'tictactoe_data_random_STRONG_RULE_REVERSE_RULE.pkl')
-    tictactoe_train_data, tictactoe_weak_finetune_data, tictactoe_val_data, tictactoe_test_data = train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, 42, 15, 5, 10, device, 1234)
-    tictactoe_train_data = create_hard_label_tictactoe_data(tictactoe_train_data, num_samples=1)
+    _, tictactoe_weak_finetune_data, tictactoe_val_data, tictactoe_test_data = train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, 42, 15, 5, 10, device, 1234)
     tictactoe_weak_finetune_data = create_hard_label_tictactoe_data(tictactoe_weak_finetune_data, num_samples=1)
     tictactoe_val_data = create_hard_label_tictactoe_data(tictactoe_val_data, num_samples=1)
+    tictactoe_test_data = create_hard_label_tictactoe_data(tictactoe_test_data, num_samples=1)
 
     training_cfg = get_training_cfg()
 
-    finetune_sweep_parallel(
-        pretrained_project_name,
-        finetuned_project_name,
-        experiment_folder,
-        tictactoe_weak_finetune_data,
-        tictactoe_val_data,
-        tictactoe_test_data,
-        training_cfg,
-        8
-    )
+    # 2) build task list
+    model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
+    tasks = [
+        (weak_size, model_sizes[j])
+        for i, weak_size in enumerate(model_sizes)
+        for j in range(i+1, len(model_sizes))
+    ]
+    print(f"Total tasks: {len(tasks)}")
+
+    # 3) launch one worker per GPU
+    ngpus = t.cuda.device_count()
+    if ngpus == 0:
+        raise RuntimeError("No CUDA GPUs detected.")
+
+    # shared queue
+    mp.set_start_method("spawn", force=True)
+    manager = Manager()
+    task_queue = manager.Queue()
+    for task in tasks:
+        task_queue.put(task)
+
+    processes = []
+    for gpu in range(ngpus):
+        p = mp.Process(
+            target=worker,
+            args=(
+                gpu,
+                pretrained_project_name, finetuned_project_name, experiment_folder,
+                tictactoe_weak_finetune_data, tictactoe_val_data, tictactoe_test_data, training_cfg,
+                task_queue
+            )
+        )
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
+
+    print("All finetune tasks completed.")
+
+if __name__ == "__main__":
+    main()

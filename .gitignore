@@ -2,7 +2,11 @@
 venv/
 ENV/
 env/
-.venv/
+venv/
+wsgvenv*/
+wsgvenv4*/
+uv_venv*/
+uv_venv2*/
 
 # Python bytecode and cache
 __pycache__/

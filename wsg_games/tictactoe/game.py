@@ -9,6 +9,7 @@ class State(Enum):
     OVER = 1
     ONGOING = 2
 
+
 class Goal(Enum):
     WEAK_GOAL = 0   # X wins if X has 3 in a row
     STRONG_GOAL = 1  # X wins if O has 3 in a row
@@ -24,8 +25,10 @@ class Goal(Enum):
 class Player(Enum):
     X = 0
     O = 1
+    
 
 class Board:
+    """Contains a board state, i.e. move history. The game can still be ongoing."""
     def __init__(self, seq: list[int | t.Tensor] | None = None) -> None:
         """If seq != None, then the board is initialized with the moves in seq"""
         self.grid: list[Player | None] = [None] * 9  # Game board, cell i has Player i in it
@@ -85,31 +88,31 @@ class Board:
                 ################################
                 #         No diagonals         #
                 ################################
-                # if ("top left -> bottom right" in termination_conditions or
-                # "bottom left -> top right" in termination_conditions):
-                #     match terminating_player:
-                #         case None:
-                #             return None
-                #         case Player.X:
-                #             return Player.O
-                #         case Player.O:
-                #             return Player.X
-                #         case _:
-                #             raise ValueError(f"Unexpected terminating_player {terminating_player}")
-                # else:
-                #     return terminating_player
+                if ("top left -> bottom right" in termination_conditions or
+                "bottom left -> top right" in termination_conditions):
+                    match terminating_player:
+                        case None:
+                            return None
+                        case Player.X:
+                            return Player.O
+                        case Player.O:
+                            return Player.X
+                        case _:
+                            raise ValueError(f"Unexpected terminating_player {terminating_player}")
+                else:
+                    return terminating_player
                 ################################
                 #         Reverse rule         #
                 ################################
-                match terminating_player:
-                    case None:
-                        return None
-                    case Player.X:
-                        return Player.O
-                    case Player.O:
-                        return Player.X
-                    case _:
-                        raise ValueError(f"Unexpected terminating_player {terminating_player}")
+                # match terminating_player:
+                #     case None:
+                #         return None
+                #     case Player.X:
+                #         return Player.O
+                #     case Player.O:
+                #         return Player.X
+                #     case _:
+                #         raise ValueError(f"Unexpected terminating_player {terminating_player}")
                 ################################
             case _:
                 raise ValueError(f"Unexpected goal {goal}") 
