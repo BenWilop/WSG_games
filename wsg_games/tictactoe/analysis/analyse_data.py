@@ -12,13 +12,17 @@ from wsg_games.tictactoe.data import TicTacToeData
 
 def entropy(labels: t.Tensor) -> float:
     """Minimal achievable CE loss"""
-    sliced_labels = labels[:, 3:, :]
-    distribution = dist.Categorical(probs=sliced_labels)
+    assert t.allclose(
+        labels.sum(dim=1),
+        t.ones(labels.size(0), device=labels.device),
+        atol=1e-6
+    ), "Each row of `labels` must sum to 1.0"
+    distribution = dist.Categorical(probs=labels)
     ent = distribution.entropy()
     return ent.mean().item()
 
-
 def print_data_statistics(tictactoe_data: TicTacToeData) -> None:
+    """Prints shape, train and test CE loss, and entropy of the data."""
     print("Shape Data:   ", tictactoe_data.games_data.shape)
     print("Shape Random: ", tictactoe_data.random_move_labels.shape)
     print("Shape Weak:   ", tictactoe_data.weak_goals_labels.shape)
@@ -34,7 +38,10 @@ def print_data_statistics(tictactoe_data: TicTacToeData) -> None:
     print("--------------------------------------------------------")
     
 
-def get_all_prefixes(games_data: t.Tensor) -> set:
+def get_all_prefixes(games_data: t.Tensor) -> set[tuple[int]]:
+    """
+    Goes through all games [t1, t2, t3, ...] and collects all prefixes
+    (t1, t2), (t1, t2, t3), ... in a set."""
     games_data = games_data.cpu()
     prefixes = set()
     n_games, game_length = games_data.shape
@@ -51,7 +58,6 @@ def calculate_leakage_percentage(train_data: TicTacToeData, test_data: TicTacToe
     Computes the percentage of test prefixes (game states) that also appear in the train data.
     """
     train_prefixes = get_all_prefixes(train_data.games_data)
-    test_prefixes = get_all_prefixes(test_data.games_data)
     
     leaked = 0
     total = 0
@@ -69,14 +75,21 @@ def calculate_leakage_percentage(train_data: TicTacToeData, test_data: TicTacToe
     return leakage_pct
 
 
-def get_bin_index(count: int, bin_edges: list[int]) -> int:
+def _get_bin_index(count: int, bin_edges: list[int]) -> int:
+    """Helper methods to compute histogram bin index."""
     for i, edge in enumerate(bin_edges):
         if count <= edge:
             return i
     return len(bin_edges) - 1
 
 
-def compute_prefix_histograms(games_tensor: t.Tensor, bin_edges: list[int]) -> tuple[list, list]:
+def _compute_prefix_histograms(games_tensor: t.Tensor, bin_edges: list[int]) -> tuple[list, list]:
+    """
+    Computes the prefix frequency histogram for a given tensor of games.
+    Returns two histograms, the k-th element is number of elements in k-th bucket.
+    unweighted_hist = duplicate prefixes counted once
+    weighted_hist = duplicate prefixes counted multiple times.
+    """
     prefix_counts = Counter()
     games_np = games_tensor.cpu().numpy()
     n_games, game_length = games_np.shape
@@ -91,13 +104,14 @@ def compute_prefix_histograms(games_tensor: t.Tensor, bin_edges: list[int]) -> t
     unweighted_hist = [0] * len(bin_edges)
     weighted_hist = [0] * len(bin_edges)
     for freq in prefix_counts.values():
-        bin_index = get_bin_index(freq, bin_edges)
+        bin_index = _get_bin_index(freq, bin_edges)
         unweighted_hist[bin_index] += 1
         weighted_hist[bin_index] += freq
     return unweighted_hist, weighted_hist
 
 
-def plot_binned_histograms(unweighted_hist: list, weighted_hist: list, title: str, bin_edges: list[str]):
+def _plot_binned_histograms(unweighted_hist: list, weighted_hist: list, title: str, bin_edges: list[str]):
+    """Plots the result of compute_prefix_histograms."""
     total_unique = sum(unweighted_hist)
     total_occurrences = sum(weighted_hist)
     unweighted_pct = [100 * count / total_unique for count in unweighted_hist]
@@ -124,8 +138,14 @@ def plot_binned_histograms(unweighted_hist: list, weighted_hist: list, title: st
 
 
 def plot_train_test_prefix_histograms(train_data: TicTacToeData, test_data: TicTacToeData, bin_edges: list[str]=[1, 10, 100, 1000, 10000, 100000, 1000000]):
-    train_unweighted, train_weighted = compute_prefix_histograms(train_data.games_data, bin_edges)
-    test_unweighted, test_weighted = compute_prefix_histograms(test_data.games_data, bin_edges)
+    """
+    Left: bin n -> how many unique prefixes have n occurrences in the train data.
+    Right: bin n -> how many prefixes have n occurrences in the test data.
+    Top: train data
+    Bottom: test data
+    """
+    train_unweighted, train_weighted = _compute_prefix_histograms(train_data.games_data, bin_edges)
+    test_unweighted, test_weighted = _compute_prefix_histograms(test_data.games_data, bin_edges)
     
-    plot_binned_histograms(train_unweighted, train_weighted, "Train Data Prefix Frequency Histogram", bin_edges)
-    plot_binned_histograms(test_unweighted, test_weighted, "Test Data Prefix Frequency Histogram", bin_edges)
+    _plot_binned_histograms(train_unweighted, train_weighted, "Train Data Prefix Frequency Histogram", bin_edges)
+    _plot_binned_histograms(test_unweighted, test_weighted, "Test Data Prefix Frequency Histogram", bin_edges)

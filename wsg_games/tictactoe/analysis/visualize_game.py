@@ -10,6 +10,12 @@ from wsg_games.tictactoe.data import TicTacToeData
 
 
 def visualize_game(data: TicTacToeData, game_id: int, model):
+    """
+    Each row is one move of the game, marked as 'x'. Each plot is soft labels.
+    Column 0: Model output
+    Column 1: Random label
+    Column 2: Weak goal label
+    """
     game_moves = data.games_data[game_id]
     print(game_moves)
 
