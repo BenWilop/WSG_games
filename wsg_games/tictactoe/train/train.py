@@ -151,14 +151,14 @@ def train_model(model, goal: Goal, optimizer, loss_fn,
         model.load_state_dict(best_model_state)
         
 
-def run_full_training(project_name, model_size: str, goal: Goal, train_data, val_data, test_data, training_cfg: dict, model_cfg: dict, device: t.device) -> None:
+def run_full_training(project_name, model_size: str, goal: Goal, train_data, val_data, test_data, training_cfg: dict, model_cfg: dict) -> None:
     lr = training_cfg.get("learning_rate")
     weight_decay = training_cfg.get("weight_decay")
     max_epochs = training_cfg.get("max_epochs")
     early_stopping_patience = training_cfg.get("early_stopping_patience")
     batch_size = training_cfg.get("batch_size")
 
-    model = HookedTransformer(model_cfg).to(device)
+    model = HookedTransformer(model_cfg)
     loss_fn = cross_entropy
     optimizer =  t.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 

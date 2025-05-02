@@ -175,11 +175,10 @@ def finetune_sweep(pretrained_project_name: str, finetuned_project_name: str, ex
     model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
     
     for i, weak_size in enumerate(model_sizes):
-        weak_model = load_model(pretrained_project_name, weak_size, Goal.WEAK_GOAL, experiment_folder)
+        weak_model = load_model(pretrained_project_name, weak_size, Goal.WEAK_GOAL, experiment_folder, device)
         if not weak_model:
             print(f"Weak model of size {weak_size} not found, skipping.")
             continue
-        weak_model.to(device)
         
         for j in range(i + 1, len(model_sizes)):
             strong_size = model_sizes[j]
@@ -187,11 +186,10 @@ def finetune_sweep(pretrained_project_name: str, finetuned_project_name: str, ex
             if matching_files:
                 print(f"Finetuned {strong_size} to {weak_size} already exists. Skipping ...")
             else:
-                strong_model = load_model(pretrained_project_name, strong_size, Goal.STRONG_GOAL, experiment_folder)
+                strong_model = load_model(pretrained_project_name, strong_size, Goal.STRONG_GOAL, experiment_folder, device)
                 if not strong_model:
                     print(f"Strong model of size {strong_size} not found, skipping.")
                     continue
-                strong_model.to(device)
 
                 finetuned_model = deepcopy(strong_model)
                 print(f"Finetuning: weak model ({weak_size}) -> strong model ({strong_size})")

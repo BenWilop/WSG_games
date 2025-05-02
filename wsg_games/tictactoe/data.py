@@ -140,16 +140,12 @@ def calculate_tictactoe_data_random(n_samples: int) -> TicTacToeData:
 
 def split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_inds, test_inds):
     """Returns train, finetune, validation and test objects of TicTacToeData again."""
-    device = tictactoe_data.games_data.device
-    def to_device(data):
-        return data.to(device) if device else data
-
     def build_dataset(indices):
         return TicTacToeData(
-            games_data=to_device(tictactoe_data.games_data[indices]),
-            random_move_labels=to_device(tictactoe_data.random_move_labels[indices]),
-            weak_goals_labels=to_device(tictactoe_data.weak_goals_labels[indices]),
-            strong_goals_labels=to_device(tictactoe_data.strong_goals_labels[indices]),
+            games_data=tictactoe_data.games_data[indices],
+            random_move_labels=tictactoe_data.random_move_labels[indices],
+            weak_goals_labels=tictactoe_data.weak_goals_labels[indices],
+            strong_goals_labels=tictactoe_data.strong_goals_labels[indices],
         )
 
     train_data = build_dataset(train_inds)
@@ -160,7 +156,7 @@ def split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_in
     return train_data, weak_finetune_data, val_data, test_data
 
 
-def train_test_split_tictactoe_first(tictactoe_data, train_ratio, weak_finetune_ratio, val_ratio, test_ratio, device=None, seed=None):
+def train_test_split_tictactoe_first(tictactoe_data, train_ratio, weak_finetune_ratio, val_ratio, test_ratio, seed=None):
     """Randomly splits data."""
     if abs(train_ratio + weak_finetune_ratio + val_ratio + test_ratio - 1.0) > 1e-6:
         raise ValueError("Train/Val/Test ratios must sum to 1.")
@@ -184,7 +180,7 @@ def train_test_split_tictactoe_first(tictactoe_data, train_ratio, weak_finetune_
     return split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_inds, test_inds)
 
 
-def train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, n_first_two_train, n_first_two_weak_finetune, n_first_two_val, n_first_two_test, device=None, seed=None):
+def train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, n_first_two_train, n_first_two_weak_finetune, n_first_two_val, n_first_two_test, seed=None):
     """
     First randomly bins first two moves into train, weak finetune, val and test. 
     Then selects all games with these first two moves.
@@ -212,7 +208,7 @@ def train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, n_firs
     val_inds = indices_for_first_two_moves(val_first_two_moves)
     test_inds = indices_for_first_two_moves(test_first_two_moves)
 
-    return split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_inds, test_inds, device)
+    return split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_inds, test_inds)
 
 
 def random_sample_tictactoe_data(tictactoe_data: TicTacToeData, n_samples: int) -> TicTacToeData:
@@ -249,39 +245,52 @@ def create_hard_label_tictactoe_data(data: TicTacToeData, num_samples, random_se
     """
     t.manual_seed(random_seed)
     new_games_data = data.games_data.repeat_interleave(num_samples, dim=0)
+    new_random_move_labels  = data.random_move_labels.repeat_interleave(num_samples, dim=0)
     new_weak_goals_labels  = sample_hard_labels_from_soft(data.weak_goals_labels, num_samples=num_samples)
     new_strong_goals_labels = sample_hard_labels_from_soft(data.strong_goals_labels, num_samples=num_samples)
     return TicTacToeData(
         games_data=new_games_data,
-        random_move_labels=data.random_move_labels,
+        random_move_labels=new_random_move_labels,
         weak_goals_labels=new_weak_goals_labels,
         strong_goals_labels=new_strong_goals_labels
     )
 
 
-def cache_tictactoe_data(path: str) -> TicTacToeData:
+def move_tictactoe_data_to_device(data: TicTacToeData, device: t.device) -> TicTacToeData:
+    """Move data to device."""
+    if device is not None:
+        data.games_data = data.games_data.to(device)
+        data.random_move_labels = data.random_move_labels.to(device)
+        data.weak_goals_labels = data.weak_goals_labels.to(device)
+        data.strong_goals_labels = data.strong_goals_labels.to(device)
+    return data
+
+
+def cache_tictactoe_data(path: str, device: t.device) -> TicTacToeData:
     """calculate_tictactoe_data and save or load cache"""
     if os.path.exists(path):
         with open(path, 'rb') as f:
             data = pickle.load(f)
         assert isinstance(data, TicTacToeData), f"Data loaded from {path} is not a TicTacToeData object"
-        return data
     else:
         data = calculate_tictactoe_data()
         with open(path, 'wb') as f:
             pickle.dump(data, f)
-        return data
+       
+    data = move_tictactoe_data_to_device(data, device)
+    return data
 
 
-def cache_tictactoe_data_random(path: str) -> TicTacToeData:
+def cache_tictactoe_data_random(path: str, device: t.device) -> TicTacToeData:
     """calculate_tictactoe_data_random and save or load cache"""
     if os.path.exists(path):
         with open(path, 'rb') as f:
             data = pickle.load(f)
         assert isinstance(data, TicTacToeData), f"Data loaded from {path} is not a TicTacToeData object"
-        return data
     else:
         data = calculate_tictactoe_data_random(200000)
         with open(path, 'wb') as f:
             pickle.dump(data, f)
-        return data
+        
+    data = move_tictactoe_data_to_device(data, device)
+    return data

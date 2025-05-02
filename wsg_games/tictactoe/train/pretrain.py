@@ -11,10 +11,10 @@ from wsg_games.tictactoe.train.save_load_models import load_model, load_model_ge
 from wsg_games.tictactoe.train.create_models import count_parameters
 
 
-def pretrain_models(experiment_folder:str, project_name: str, tictactoe_train_data, tictactoe_val_data, tictactoe_test_data, training_cfg, get_model_config) -> None:
+def pretrain_models(experiment_folder:str, project_name: str, tictactoe_train_data, tictactoe_val_data, tictactoe_test_data, training_cfg, get_model_config, device: t.device) -> None:
     for model_size in ["nano", "micro", "mini", "small", "medium", "large", "huge"]:
         for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
-            matching_files = load_model_get_matching_files(project_name, model_size, goal, experiment_folder)
+            matching_files = load_model_get_matching_files(project_name, model_size, goal, experiment_folder, device)
             if not matching_files:
                 model_cfg = get_model_config(model_size)
                 model, experiment_name, run_id = run_full_training(project_name, model_size, goal, tictactoe_train_data, tictactoe_val_data, tictactoe_test_data, training_cfg, model_cfg)
@@ -38,7 +38,7 @@ def compute_avg_loss(model, games_data, labels, batch_size=1000):
 
     return total_loss / total_samples
 
-def plot_loss_pretrain_models(experiment_folder, project_name, test_data):
+def plot_loss_pretrain_models(experiment_folder, project_name, test_data, device: t.device) -> None:
     minimal_loss_weak = 0.6561687588691711
     minimal_loss_strong = 0.5871079564094543
 
@@ -59,7 +59,7 @@ def plot_loss_pretrain_models(experiment_folder, project_name, test_data):
 
     for model_size in ["nano", "micro", "mini", "small", "medium", "large", "huge", "gigantic"]:
         for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
-            model = load_model(project_name, model_size, goal, experiment_folder)
+            model = load_model(project_name, model_size, goal, experiment_folder, device)
             if not model:
                 continue
 

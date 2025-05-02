@@ -12,7 +12,7 @@ from wsg_games.tictactoe.train.finetune import finetune_strong_with_weak
 from wsg_games.tictactoe.train.save_load_models import (
     load_model,
     save_model,
-    load_finetuned_model_get_matching_files
+    load_finetuned_model_get_matching_files,
 )
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.train.create_models import (
@@ -22,6 +22,7 @@ from wsg_games.tictactoe.data import (
     cache_tictactoe_data_random,
     train_test_split_tictactoe_first_two_moves_no_overlap,
     create_hard_label_tictactoe_data,
+    move_tictactoe_data_to_device
 )
 
 def worker(gpu_id: int,
@@ -35,6 +36,9 @@ def worker(gpu_id: int,
     print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(gpu_id)}")
     device = t.device(f"cuda:{gpu_id}")
 
+    weak_data = move_tictactoe_data_to_device(weak_data, device=device)
+    val_data = move_tictactoe_data_to_device(val_data, device=device)
+    test_data = move_tictactoe_data_to_device(test_data, device=device)
     while True:
         try:
             weak_size, strong_size = task_queue.get_nowait()
@@ -44,14 +48,14 @@ def worker(gpu_id: int,
 
         print(f"[Worker {gpu_id}] starting task {weak_size}→{strong_size}")
         # skip if already done
-        if load_finetuned_model_get_matching_files(
-                finetuned_project_name, weak_size, strong_size, experiment_folder):
+        if load_finetuned_model_get_matching_files(finetuned_project_name, weak_size, 
+                                                   strong_size, experiment_folder):
             print(f"[Worker {gpu_id}] already finetuned {weak_size}→{strong_size}, skipping")
             continue
 
         # load pretrained weak & strong
-        weak_model = load_model(pretrained_project_name, weak_size, Goal.WEAK_GOAL, experiment_folder)
-        strong_model = load_model(pretrained_project_name, strong_size, Goal.STRONG_GOAL, experiment_folder)
+        weak_model = load_model(pretrained_project_name, weak_size, Goal.WEAK_GOAL, experiment_folder, device)
+        strong_model = load_model(pretrained_project_name, strong_size, Goal.STRONG_GOAL, experiment_folder, device)
         if weak_model is None or strong_model is None:
             print(f"[Worker {gpu_id}] missing pretrained model for {weak_size} or {strong_size}, skipping")
             continue
@@ -88,7 +92,7 @@ def main():
     experiment_folder = '/homes/55/bwilop/wsg/experiments/'
 
     tictactoe_data = cache_tictactoe_data_random(data_folder + 'tictactoe_data_random_STRONG_RULE_REVERSE_RULE.pkl', device=device)
-    _, tictactoe_weak_finetune_data, tictactoe_val_data, tictactoe_test_data = train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, 42, 15, 5, 10, device, 1234)
+    _, tictactoe_weak_finetune_data, tictactoe_val_data, tictactoe_test_data = train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, 42, 15, 5, 10, 1234)
     tictactoe_weak_finetune_data = create_hard_label_tictactoe_data(tictactoe_weak_finetune_data, num_samples=1)
     tictactoe_val_data = create_hard_label_tictactoe_data(tictactoe_val_data, num_samples=1)
     tictactoe_test_data = create_hard_label_tictactoe_data(tictactoe_test_data, num_samples=1)
