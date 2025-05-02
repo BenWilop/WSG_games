@@ -18,12 +18,13 @@ def rearrange(tensor: t.Tensor) -> t.Tensor:
 
     Flattens the first two dimensions (n_games and game_length) into one.
     This converts a tensor of shape [n_games, game_length, n_tokens]
-    into [n_games * game_length, n_tokens] which is what F.cross_entropy expects.
+    into [n_games * game_length, n_tokens] which is what a loss_fn such as F.cross_entropy expects.
     """
     return einops.rearrange(tensor[:, 3:, :], "batch seq token -> (batch seq) token")
 
 
 def log_epoch_wandb(logits: Float[t.Tensor, "n_games game_length n_tokens"], data: TicTacToeData, loss_fn, folder) -> None:
+  """Logs loss and accuracy."""
   res = {}
   flat_logits = rearrange(logits)
   flat_weak_labels = rearrange(data.weak_goals_labels)
@@ -43,6 +44,7 @@ def log_epoch_wandb(logits: Float[t.Tensor, "n_games game_length n_tokens"], dat
 
 
 def log_generating_game_wandb(model, n_samples=20):
+    """Generates games using the model and logs the performance"""
     samples = sample_games(model, 1, n_samples)
     evaluation = eval_model(samples)
     res = {}
@@ -52,6 +54,7 @@ def log_generating_game_wandb(model, n_samples=20):
 
 
 def evaluate_model(model, train_data, test_data, loss_fn, n_samples=1000):
+    """Logs train and test set loss and performance."""
     model.eval()
     with t.no_grad():
         train_sample = random_sample_tictactoe_data(train_data, n_samples)
@@ -63,8 +66,7 @@ def evaluate_model(model, train_data, test_data, loss_fn, n_samples=1000):
         log_epoch_wandb(test_logits, test_sample, loss_fn, "test/")
 
 
-def train_model(project_name: str, experiment_name: str, timestamp: str,
-                model, goal: Goal, optimizer, loss_fn,
+def train_model(model, goal: Goal, optimizer, loss_fn,
                 train_data: TicTacToeData, val_data: TicTacToeData, test_data: TicTacToeData,
                 max_epochs: int, early_stopping_patience: int, batch_size: int) -> None:
     """Log train + test ~ every 1000 datapoints and generation every 50000"""
@@ -149,14 +151,14 @@ def train_model(project_name: str, experiment_name: str, timestamp: str,
         model.load_state_dict(best_model_state)
         
 
-def run_full_training(project_name, model_size: str, goal: Goal, train_data, val_data, test_data, training_cfg: dict, model_cfg: dict) -> None:
+def run_full_training(project_name, model_size: str, goal: Goal, train_data, val_data, test_data, training_cfg: dict, model_cfg: dict, device: t.device) -> None:
     lr = training_cfg.get("learning_rate")
     weight_decay = training_cfg.get("weight_decay")
     max_epochs = training_cfg.get("max_epochs")
     early_stopping_patience = training_cfg.get("early_stopping_patience")
     batch_size = training_cfg.get("batch_size")
 
-    model = HookedTransformer(model_cfg).to(model_cfg.device)
+    model = HookedTransformer(model_cfg).to(device)
     loss_fn = cross_entropy
     optimizer =  t.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
@@ -181,8 +183,7 @@ def run_full_training(project_name, model_size: str, goal: Goal, train_data, val
             "batch_size": batch_size,
         })
     run_id = wandb.run.id
-    train_model(project_name, experiment_name, timestamp,
-        model, goal, optimizer, loss_fn,
+    train_model(model, goal, optimizer, loss_fn,
         train_data, val_data, test_data, max_epochs, early_stopping_patience, batch_size=batch_size)
 
     wandb.finish()

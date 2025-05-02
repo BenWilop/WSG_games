@@ -138,8 +138,9 @@ def calculate_tictactoe_data_random(n_samples: int) -> TicTacToeData:
     return label_games_tensor(games_tensor)
 
 
-def split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_inds, test_inds, device=None):
+def split_data_by_indices(tictactoe_data, train_inds, weak_finetune_inds, val_inds, test_inds):
     """Returns train, finetune, validation and test objects of TicTacToeData again."""
+    device = tictactoe_data.games_data.device
     def to_device(data):
         return data.to(device) if device else data
 

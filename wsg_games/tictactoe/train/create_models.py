@@ -35,7 +35,6 @@ def get_model_config(size: str):
         "d_vocab_out": 10,
         "n_ctx": 10,
         "init_weights": True,
-        "device": "cuda",
         "seed": 1337,
     }
     model_sizes = get_model_sizes()

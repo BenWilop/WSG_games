@@ -16,6 +16,7 @@ from wsg_games.tictactoe.game import Goal
 
 
 def quick_evaluation(name, model, test_data):
+    """Prints weak and strong test loss."""
     model.eval()
     with t.no_grad():
         test_sample = random_sample_tictactoe_data(test_data, 20000)
@@ -28,6 +29,7 @@ def quick_evaluation(name, model, test_data):
 
 
 def evaluate_model_finetuning(model, train_games, train_labels, test_games, test_labels, loss_fn, n_samples=1000):
+    """Logs test and train set loss."""
     train_indices = t.randperm(train_games.size(0))[:n_samples]
     test_indices  = t.randperm(test_games.size(0))[:n_samples]
     train_sample = train_games[train_indices]
@@ -50,7 +52,7 @@ def evaluate_model_finetuning(model, train_games, train_labels, test_games, test
 
 def finetune_strong_with_weak(project_name: str, 
                               weak_model, weak_model_size: str, strong_model, strong_model_size: str, 
-                              weak_train_data: TicTacToeData, val_data: TicTacToeData, test_data: TicTacToeData, training_cfg: dict):
+                              weak_train_data: TicTacToeData, val_data: TicTacToeData, test_data: TicTacToeData, training_cfg: dict) -> tuple:
     """
     Early stopping by checkpointing after every optimizer step, then early stop with patience 1.
     """
@@ -169,7 +171,7 @@ def finetune_strong_with_weak(project_name: str,
 
 def finetune_sweep(pretrained_project_name: str, finetuned_project_name: str, experiment_folder: str,
                    weak_finetune_data: TicTacToeData, val_data: TicTacToeData, test_data: TicTacToeData,
-                   training_cfg: dict):
+                   training_cfg: dict, device: t.device) -> None:
     model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
     
     for i, weak_size in enumerate(model_sizes):
@@ -177,6 +179,7 @@ def finetune_sweep(pretrained_project_name: str, finetuned_project_name: str, ex
         if not weak_model:
             print(f"Weak model of size {weak_size} not found, skipping.")
             continue
+        weak_model.to(device)
         
         for j in range(i + 1, len(model_sizes)):
             strong_size = model_sizes[j]
@@ -188,6 +191,7 @@ def finetune_sweep(pretrained_project_name: str, finetuned_project_name: str, ex
                 if not strong_model:
                     print(f"Strong model of size {strong_size} not found, skipping.")
                     continue
+                strong_model.to(device)
 
                 finetuned_model = deepcopy(strong_model)
                 print(f"Finetuning: weak model ({weak_size}) -> strong model ({strong_size})")

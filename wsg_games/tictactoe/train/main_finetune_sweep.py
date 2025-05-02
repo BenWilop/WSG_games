@@ -28,15 +28,12 @@ def worker(gpu_id: int,
            pretrained_project_name, finetuned_project_name, experiment_folder,
            weak_data, val_data, test_data, training_cfg,
            task_queue):
-    # TODO pass device instead
-    import os
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-    t.cuda.set_device(0)
-    print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(0)}")
+    print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(gpu_id)}")
 
     # bind this process to its GPU
-    # t.cuda.set_device(gpu_id)
-    # print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(gpu_id)}")
+    t.cuda.set_device(gpu_id)
+    print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(gpu_id)}")
+    device = t.device(f"cuda:{gpu_id}")
 
     while True:
         try:
@@ -58,6 +55,8 @@ def worker(gpu_id: int,
         if weak_model is None or strong_model is None:
             print(f"[Worker {gpu_id}] missing pretrained model for {weak_size} or {strong_size}, skipping")
             continue
+        weak_model.to(device)
+        strong_model.to(device)
 
         # perform finetune
         model_copy = copy.deepcopy(strong_model)
@@ -88,7 +87,7 @@ def main():
     data_folder = '/homes/55/bwilop/wsg/data/'
     experiment_folder = '/homes/55/bwilop/wsg/experiments/'
 
-    tictactoe_data = cache_tictactoe_data_random(data_folder + 'tictactoe_data_random_STRONG_RULE_REVERSE_RULE.pkl')
+    tictactoe_data = cache_tictactoe_data_random(data_folder + 'tictactoe_data_random_STRONG_RULE_REVERSE_RULE.pkl', device=device)
     _, tictactoe_weak_finetune_data, tictactoe_val_data, tictactoe_test_data = train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, 42, 15, 5, 10, device, 1234)
     tictactoe_weak_finetune_data = create_hard_label_tictactoe_data(tictactoe_weak_finetune_data, num_samples=1)
     tictactoe_val_data = create_hard_label_tictactoe_data(tictactoe_val_data, num_samples=1)
