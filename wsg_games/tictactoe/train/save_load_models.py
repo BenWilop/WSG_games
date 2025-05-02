@@ -4,6 +4,7 @@ import glob
 import torch as t
 from wsg_games.tictactoe.game import Goal
 from transformer_lens import HookedTransformer
+from transformer_lens.utilities.devices import move_to_and_update_config
 
 
 def save_model(model, run_id, project_name: str, experiment_name: str, experiment_folder: str) -> None:
@@ -40,6 +41,7 @@ def load_model(project_name: str, model_size: str, goal: Goal, experiment_folder
     print(f"Loading model from {latest_file}")
     with t.serialization.safe_globals({HookedTransformer}):
         model = t.load(latest_file, weights_only=False, map_location=device)
+        model = move_to_and_update_config(model, device)
     return model
 
 
@@ -61,4 +63,5 @@ def load_finetuned_model(project_name: str, weak_model_size: str, strong_model_s
     latest_file = max(matching_files, key=os.path.getmtime)
     with t.serialization.safe_globals({HookedTransformer}):
         finetuned_model = t.load(latest_file, weights_only=False, map_location=device)
+        finetuned_model = move_to_and_update_config(finetuned_model, device)
     return finetuned_model

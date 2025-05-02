@@ -14,6 +14,7 @@ from wsg_games.tictactoe.train.save_load_models import (
     save_model,
     load_finetuned_model_get_matching_files,
 )
+from transformer_lens.utilities.devices import move_to_and_update_config
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.train.create_models import (
     get_training_cfg,
@@ -29,8 +30,6 @@ def worker(gpu_id: int,
            pretrained_project_name, finetuned_project_name, experiment_folder,
            weak_data, val_data, test_data, training_cfg,
            task_queue):
-    print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(gpu_id)}")
-
     # bind this process to its GPU
     t.cuda.set_device(gpu_id)
     print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(gpu_id)}")
@@ -59,15 +58,28 @@ def worker(gpu_id: int,
         if weak_model is None or strong_model is None:
             print(f"[Worker {gpu_id}] missing pretrained model for {weak_size} or {strong_size}, skipping")
             continue
-        weak_model.to(device)
-        strong_model.to(device)
+        weak_model = move_to_and_update_config(weak_model, device)
+        strong_model = move_to_and_update_config(strong_model, device)
+        weak_model = weak_model.to(device)
+        strong_model = strong_model.to(device)
+
+        print(f"{gpu_id} weak_data", weak_data.games_data.device)
+        print(f"{gpu_id} val_data", val_data.games_data.device)
+        print(f"{gpu_id} test_data", test_data.games_data.device)
+        for name, param in weak_model.named_parameters():
+            print(f"{gpu_id} weak_model {name:30s} -> {param.device}")
+        for name, buf in weak_model.named_buffers():
+            print(f"{gpu_id} weak_model buffer {name:30s} -> {buf.device}")
+        for name, param in strong_model.named_parameters():
+            print(f"{gpu_id} strong_model {name:30s} -> {param.device}")
+        for name, buf in strong_model.named_buffers():
+            print(f"{gpu_id} strong_model buffer {name:30s} -> {buf.device}")
 
         # perform finetune
-        model_copy = copy.deepcopy(strong_model)
         finetuned_model, exp_name, run_id = finetune_strong_with_weak(
             finetuned_project_name,
             weak_model, weak_size,
-            model_copy, strong_size,
+            strong_model, strong_size,
             weak_data, val_data, test_data,
             training_cfg
         )
@@ -81,17 +93,13 @@ def worker(gpu_id: int,
 
 
 def main():
-    if t.cuda.is_available():
-        device = t.device("cuda")
-    else:
-        raise Exception("CUDA is not available.")
-
     pretrained_project_name = "tictactoe_pretrained_reverse_rule_no_overlap_split_start_third_200k"
     finetuned_project_name = "finetune_sweep_test_parallel"
     data_folder = '/homes/55/bwilop/wsg/data/'
     experiment_folder = '/homes/55/bwilop/wsg/experiments/'
 
-    tictactoe_data = cache_tictactoe_data_random(data_folder + 'tictactoe_data_random_STRONG_RULE_REVERSE_RULE.pkl', device=device)
+    # Data has to be on CPU, otherwise worker starts working on GPU:0 by default.
+    tictactoe_data = cache_tictactoe_data_random(data_folder + 'tictactoe_data_random_STRONG_RULE_REVERSE_RULE.pkl', device=None)  # None so data lives on CPU.
     _, tictactoe_weak_finetune_data, tictactoe_val_data, tictactoe_test_data = train_test_split_tictactoe_first_two_moves_no_overlap(tictactoe_data, 42, 15, 5, 10, 1234)
     tictactoe_weak_finetune_data = create_hard_label_tictactoe_data(tictactoe_weak_finetune_data, num_samples=1)
     tictactoe_val_data = create_hard_label_tictactoe_data(tictactoe_val_data, num_samples=1)
