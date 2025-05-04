@@ -33,7 +33,7 @@ def worker(gpu_id: int,
     # bind this process to its GPU
     t.cuda.set_device(gpu_id)
     print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(gpu_id)}")
-    device = t.device(f"cuda:{gpu_id}")
+    device = str(t.device(f"cuda:{gpu_id}"))
 
     weak_data = move_tictactoe_data_to_device(weak_data, device=device)
     val_data = move_tictactoe_data_to_device(val_data, device=device)
