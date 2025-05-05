@@ -94,7 +94,8 @@ def worker(gpu_id: int,
 
 def main():
     pretrained_project_name = "tictactoe_pretrained_reverse_rule_no_overlap_split_start_third_200k"
-    finetuned_project_name = "finetune_sweep_test_parallel"
+    # finetuned_project_name = "finetune_sweep_test_parallel"
+    finetuned_project_name = "finetune_sweep_test_parallel_early_top_20"
     data_folder = '/homes/55/bwilop/wsg/data/'
     experiment_folder = '/homes/55/bwilop/wsg/experiments/'
 
@@ -106,6 +107,7 @@ def main():
     tictactoe_test_data = create_hard_label_tictactoe_data(tictactoe_test_data, num_samples=1)
 
     training_cfg = get_training_cfg()
+    training_cfg["early_stopping_patience"] = 20
 
     # 2) build task list
     model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
