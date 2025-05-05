@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# python3 wsg_games/tictactoe/train/main_finetune_sweep.py
+# python3 wsg_games/tictactoe/train/main_parallel_finetune_sweep.py
 import time
 import queue
 import copy
@@ -107,7 +107,7 @@ def main():
     tictactoe_test_data = create_hard_label_tictactoe_data(tictactoe_test_data, num_samples=1)
 
     training_cfg = get_training_cfg()
-    training_cfg["early_stopping_patience"] = 20
+    training_cfg["early_stopping_patience"] = 20    
 
     # 2) build task list
     model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]

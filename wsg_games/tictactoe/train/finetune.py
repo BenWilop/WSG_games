@@ -143,7 +143,8 @@ def finetune_strong_with_weak(project_name: str,
                 val_loss = loss_fn(rearrange(val_logits), rearrange(val_data.weak_goals_labels)).item()
             
             wandb.log({"val/val_loss_batch": val_loss})
-            if val_loss < best_val_loss_batch:
+            if False:  # THIS MEANS NO EARLY STOPPING SAVING!
+            # if val_loss < best_val_loss_batch:
                 best_val_loss_batch = val_loss
                 best_model_state = strong_model.state_dict()
 
