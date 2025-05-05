@@ -12,9 +12,10 @@ from wsg_games.tictactoe.data import TicTacToeData
 
 def entropy(labels: t.Tensor) -> float:
     """Minimal achievable CE loss"""
+    print(labels.shape)
     assert t.allclose(
-        labels.sum(dim=1),
-        t.ones(labels.size(0), device=labels.device),
+        labels.sum(dim=2),
+        t.ones((labels.size(0), labels.size(1)), device=labels.device),
         atol=1e-6
     ), "Each row of `labels` must sum to 1.0"
     distribution = dist.Categorical(probs=labels)
