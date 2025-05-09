@@ -56,6 +56,7 @@ def worker(gpu_id: int,
             continue
 
         model_cfg = get_model_config(model_size)
+        model_cfg.device = device  # Important!
         model, experiment_name, run_id = run_full_training(project_name, 
                                                            model_size, 
                                                            goal, 

@@ -7,6 +7,7 @@ import wandb
 from datetime import datetime
 from jaxtyping import Float
 from transformer_lens import HookedTransformerConfig, HookedTransformer
+from transformer_lens.utilities.devices import move_to_and_update_config
 
 from wsg_games.tictactoe.evals import evaluate_predictions, sample_games, eval_model
 from wsg_games.tictactoe.data import TicTacToeData, random_sample_tictactoe_data
@@ -159,6 +160,8 @@ def run_full_training(project_name, model_size: str, goal: Goal, train_data, val
     batch_size = training_cfg.get("batch_size")
 
     model = HookedTransformer(model_cfg)
+    model = move_to_and_update_config(model, model_cfg.device)
+
     loss_fn = cross_entropy
     optimizer =  t.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 

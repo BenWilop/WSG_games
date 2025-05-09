@@ -45,12 +45,12 @@ def _sample_game(
 ) -> list[int]:
     """Soft samples a move sequence autoregressivly from the model."""
     assert temp > 0
+    device = model.cfg.device
     seq = [10]
-    # no grad
     with t.no_grad():
         # sample 9 moves plus one end game token
         for _ in range(10):
-            logits: Tensor = model(t.tensor(seq))[0, -1]
+            logits: Tensor = model(t.tensor(seq, device=device))[0, -1]
             probs = t.softmax(logits / temp, dim=0)
             token = int(t.multinomial(probs, num_samples=1).item())
             seq.append(token)
