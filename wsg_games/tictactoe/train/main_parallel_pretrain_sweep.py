@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# python3 wsg_games/tictactoe/train/main_parallel_finetune_sweep.py
+# python3 wsg_games/tictactoe/train/main_parallel_pretrain_sweep.py
 import time
 import queue
 import copy
@@ -72,7 +72,7 @@ def worker(gpu_id: int,
 
 
 def main_pretrain():
-    project_name = "tictactoe_no_diagonal_rule_test"
+    project_name = "tictactoe_pretrain_forbidden_diagonal_rule_test"
     data_folder = '/homes/55/bwilop/wsg/data/'
     experiment_folder = '/homes/55/bwilop/wsg/experiments/'
 
