@@ -4,7 +4,7 @@ import torch.nn as nn
 
 def get_training_cfg():
     training_cfg = {
-        "learning_rate": 1e-3, # 1e-4,
+        "learning_rate": 1e-3,  # 1e-4,
         "weight_decay": 1e-4,  # 1e-5,
         "max_epochs": 1000,
         "early_stopping_patience": 3,
@@ -12,17 +12,60 @@ def get_training_cfg():
     }
     return training_cfg
 
+
 def get_model_sizes():
     model_sizes = {}
-    model_sizes["nano"]   = {"n_layers": 1, "n_heads": 1, "d_model": 1, "d_head": 1, "d_mlp": 4}
-    model_sizes["micro"]   = {"n_layers": 1, "n_heads": 2, "d_model": 4, "d_head": 2, "d_mlp": 16}
-    model_sizes["mini"]   = {"n_layers": 2, "n_heads": 4, "d_model": 8, "d_head": 2, "d_mlp": 32}
+    model_sizes["nano"] = {
+        "n_layers": 1,
+        "n_heads": 1,
+        "d_model": 1,
+        "d_head": 1,
+        "d_mlp": 4,
+    }
+    model_sizes["micro"] = {
+        "n_layers": 1,
+        "n_heads": 2,
+        "d_model": 4,
+        "d_head": 2,
+        "d_mlp": 16,
+    }
+    model_sizes["mini"] = {
+        "n_layers": 2,
+        "n_heads": 4,
+        "d_model": 8,
+        "d_head": 2,
+        "d_mlp": 32,
+    }
 
-    model_sizes["small"] = {"n_layers": 3, "n_heads": 4, "d_model": 16, "d_head": 4, "d_mlp": 64}
-    model_sizes["medium"] = {"n_layers": 4, "n_heads": 8, "d_model": 32, "d_head": 4, "d_mlp": 128}
-    model_sizes["large"] = {"n_layers": 5, "n_heads": 8, "d_model": 64, "d_head": 8, "d_mlp": 256}
+    model_sizes["small"] = {
+        "n_layers": 3,
+        "n_heads": 4,
+        "d_model": 16,
+        "d_head": 4,
+        "d_mlp": 64,
+    }
+    model_sizes["medium"] = {
+        "n_layers": 4,
+        "n_heads": 8,
+        "d_model": 32,
+        "d_head": 4,
+        "d_mlp": 128,
+    }
+    model_sizes["large"] = {
+        "n_layers": 5,
+        "n_heads": 8,
+        "d_model": 64,
+        "d_head": 8,
+        "d_mlp": 256,
+    }
 
-    model_sizes["huge"]   = {"n_layers": 6, "n_heads": 16, "d_model": 128, "d_head": 8,  "d_mlp": 512}
+    model_sizes["huge"] = {
+        "n_layers": 6,
+        "n_heads": 16,
+        "d_model": 128,
+        "d_head": 8,
+        "d_mlp": 512,
+    }
     # model_sizes["gigantic"] = {"n_layers": 7, "n_heads": 16, "d_model": 256, "d_head": 16, "d_mlp": 1024}
     return model_sizes
 

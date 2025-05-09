@@ -1,8 +1,8 @@
 import math
-from typing import Optional
 from enum import Enum
 from copy import deepcopy
 import torch as t
+from typing import Union
 
 
 class State(Enum):
@@ -11,9 +11,9 @@ class State(Enum):
 
 
 class Goal(Enum):
-    WEAK_GOAL = 0   # X wins if X has 3 in a row
-    STRONG_GOAL = 1  # X wins if O has 3 in a row
-      
+    WEAK_GOAL = 0  # X wins if X has 3 in a row
+    STRONG_GOAL = 1  # defined in get_winner
+
     def __str__(self):
         mapping = {
             Goal.WEAK_GOAL: "weak",
@@ -25,13 +25,16 @@ class Goal(Enum):
 class Player(Enum):
     X = 0
     O = 1
-    
+
 
 class Board:
     """Contains a board state, i.e. move history. The game can still be ongoing."""
-    def __init__(self, seq: list[int | t.Tensor] | None = None) -> None:
+
+    def __init__(self, seq: list[Union[int, t.Tensor]] | None = None) -> None:
         """If seq != None, then the board is initialized with the moves in seq"""
-        self.grid: list[Player | None] = [None] * 9  # Game board, cell i has Player i in it
+        self.grid: list[Player | None] = [
+            None
+        ] * 9  # Game board, cell i has Player i in it
         self.moves_played: list[int] = []  # list of cell ids that have been played
         self.game_state: State = State.ONGOING
         self.turn: Player = Player.X  # X starts
@@ -39,7 +42,7 @@ class Board:
         if seq is not None:
             if isinstance(seq, t.Tensor):
                 seq = seq.tolist()
-            for move in seq:
+            for move in seq:  # type: ignore
                 if move in range(9):
                     self.make_move(move)
 
@@ -51,7 +54,7 @@ class Board:
                 self.turn = Player.X
             case _:
                 raise ValueError(f"Unexpected turn of {self.turn}")
-            
+
     def get_termination_conditions(self) -> tuple[list[str], Player | None]:
         termination_conditions = []
         terminating_player = None
@@ -66,19 +69,23 @@ class Board:
             (2, 4, 6): "bottom left -> top right",
         }
         for condition in win_conditions.keys():
-            if (self.grid[condition[0]] is not None) and (self.grid[condition[0]] == self.grid[condition[1]] == self.grid[condition[2]]):
+            if (self.grid[condition[0]] is not None) and (
+                self.grid[condition[0]]
+                == self.grid[condition[1]]
+                == self.grid[condition[2]]
+            ):
                 terminating_player = self.grid[condition[0]]
                 termination_conditions.append(win_conditions[condition])
 
         return termination_conditions, terminating_player
-            
-    def _set_game_state(self) -> State:
+
+    def _set_game_state(self) -> None:
         termination_conditions, _ = self.get_termination_conditions()
         if termination_conditions or all(cell is not None for cell in self.grid):
             self.game_state = State.OVER
         else:
             self.game_state = State.ONGOING
-    
+
     def get_winner(self, goal: Goal) -> Player | None:
         termination_conditions, terminating_player = self.get_termination_conditions()
         match goal:
@@ -88,8 +95,10 @@ class Board:
                 ################################
                 #         No diagonals         #
                 ################################
-                if ("top left -> bottom right" in termination_conditions or
-                "bottom left -> top right" in termination_conditions):
+                if (
+                    "top left -> bottom right" in termination_conditions
+                    or "bottom left -> top right" in termination_conditions
+                ):
                     match terminating_player:
                         case None:
                             return None
@@ -98,7 +107,9 @@ class Board:
                         case Player.O:
                             return Player.X
                         case _:
-                            raise ValueError(f"Unexpected terminating_player {terminating_player}")
+                            raise ValueError(
+                                f"Unexpected terminating_player {terminating_player}"
+                            )
                 else:
                     return terminating_player
                 ################################
@@ -115,8 +126,8 @@ class Board:
                 #         raise ValueError(f"Unexpected terminating_player {terminating_player}")
                 ################################
             case _:
-                raise ValueError(f"Unexpected goal {goal}") 
-        
+                raise ValueError(f"Unexpected goal {goal}")
+
     def get_possible_moves(self) -> list[int]:
         match self.game_state:
             case State.OVER:
@@ -126,7 +137,7 @@ class Board:
             case _:
                 raise ValueError(f"Unexpected game state of {self.game_state}")
 
-    def make_move(self, move: int) -> None:
+    def make_move(self, move: int) -> Board:
         if move not in self.get_possible_moves():
             raise ValueError(f"{move} is not a valid move.")
         self.grid[move] = self.turn
@@ -151,13 +162,25 @@ class Board:
                 return "O"
             else:
                 return str(cell)
-    
-        row1 = "| {} | {} | {} |".format(cell_to_str(self.grid[0]), cell_to_str(self.grid[1]), cell_to_str(self.grid[2]))
-        row2 = "| {} | {} | {} |".format(cell_to_str(self.grid[3]), cell_to_str(self.grid[4]), cell_to_str(self.grid[5]))
-        row3 = "| {} | {} | {} |".format(cell_to_str(self.grid[6]), cell_to_str(self.grid[7]), cell_to_str(self.grid[8]))
-        
+
+        row1 = "| {} | {} | {} |".format(
+            cell_to_str(self.grid[0]),
+            cell_to_str(self.grid[1]),
+            cell_to_str(self.grid[2]),
+        )
+        row2 = "| {} | {} | {} |".format(
+            cell_to_str(self.grid[3]),
+            cell_to_str(self.grid[4]),
+            cell_to_str(self.grid[5]),
+        )
+        row3 = "| {} | {} | {} |".format(
+            cell_to_str(self.grid[6]),
+            cell_to_str(self.grid[7]),
+            cell_to_str(self.grid[8]),
+        )
+
         return row1 + "\n" + row2 + "\n" + row3
-        
+
     def replay(self) -> None:
         temp_board = Board()
         for i, move in enumerate(self.moves_played):
@@ -165,13 +188,14 @@ class Board:
             print(f"\nAfter move {i} (move: {move}):")
             print(temp_board)
 
+
 def generate_all_games(
-    boards: list[Board] = None, finished_boards: Optional[list[Board]] = None
+    boards: list[Board] | None = None, finished_boards: list[Board] | None = None
 ) -> list[Board]:
     if boards is None:
         boards = [Board()]
     if finished_boards is None:
-        print('Generating all games...')
+        print("Generating all games...")
         finished_boards = []
     ongoing_boards: list[Board] = []
     for board in boards:
@@ -184,10 +208,11 @@ def generate_all_games(
             finished_boards.append(board)
 
     if ongoing_boards == []:
-        print('Finished generating all games')
+        print("Finished generating all games")
         return finished_boards
     else:
         return generate_all_games(ongoing_boards, finished_boards=finished_boards)
+
 
 def minimax(board: Board, goal: Goal) -> int:
     """Player X is the maximizer and Player O is the minimizer"""
@@ -218,6 +243,7 @@ def minimax(board: Board, goal: Goal) -> int:
         case _:
             raise ValueError(f"Unexpected turn in minimax {board.turn}")
 
+
 def get_best_moves(board: Board, goal: Goal) -> list[int]:
     """Player X is the maximizer and Player O is the minimizer"""
     match board.turn:
@@ -228,7 +254,7 @@ def get_best_moves(board: Board, goal: Goal) -> list[int]:
         case _:
             raise ValueError(f"Unexpected turn in get_best_moves {board.turn}")
 
-    best_moves: list[tuple[int, int]] = []  # (move, score)
+    best_moves_and_score: list[tuple[int, int]] = []  # (move, score)
     for move in board.get_possible_moves():
         board.make_move(move)
         score = minimax(board, goal)
@@ -237,14 +263,18 @@ def get_best_moves(board: Board, goal: Goal) -> list[int]:
             case Player.X:
                 if score >= best_score:
                     best_score = score
-                    best_moves.append((move, score))
+                    best_moves_and_score.append((move, score))
             case Player.O:
                 if score <= best_score:
                     best_score = score
-                    best_moves.append((move, score))
+                    best_moves_and_score.append((move, score))
             case _:
-                raise ValueError(f"Unexpected turn in get_best_moves for loop {board.turn}")
+                raise ValueError(
+                    f"Unexpected turn in get_best_moves for loop {board.turn}"
+                )
 
-    assert best_moves != []
-    best_moves = [move for move, score in best_moves if score == best_score]  # extract moves
+    assert best_moves_and_score != []
+    best_moves = [
+        move for move, score in best_moves_and_score if score == best_score
+    ]  # extract moves
     return best_moves

@@ -5,13 +5,19 @@ from tqdm.notebook import tqdm
 from datetime import datetime
 import wandb
 from copy import deepcopy
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import multiprocessing
 
 
-from wsg_games.tictactoe.train.train import rearrange, log_generating_game_wandb, evaluate_model
+from wsg_games.tictactoe.train.train import (
+    rearrange,
+    log_generating_game_wandb,
+    evaluate_model,
+)
 from wsg_games.tictactoe.data import random_sample_tictactoe_data, TicTacToeData
-from wsg_games.tictactoe.train.save_load_models import save_model, load_model, load_finetuned_model_get_matching_files, load_finetuned_model
+from wsg_games.tictactoe.train.save_load_models import (
+    save_model,
+    load_model,
+    load_finetuned_model_get_matching_files,
+)
 from wsg_games.tictactoe.game import Goal
 
 
@@ -21,17 +27,23 @@ def quick_evaluation(name, model, test_data):
     with t.no_grad():
         test_sample = random_sample_tictactoe_data(test_data, 20000)
         test_logits = model(test_sample.games_data)
-        weak_loss   = cross_entropy(rearrange(test_logits), rearrange(test_sample.weak_goals_labels)).item()
-        strong_loss = cross_entropy(rearrange(test_logits), rearrange(test_sample.strong_goals_labels)).item()
+        weak_loss = cross_entropy(
+            rearrange(test_logits), rearrange(test_sample.weak_goals_labels)
+        ).item()
+        strong_loss = cross_entropy(
+            rearrange(test_logits), rearrange(test_sample.strong_goals_labels)
+        ).item()
         print(name)
         print("weak_loss: ", weak_loss)
         print("strong_loss: ", strong_loss)
 
 
-def evaluate_model_finetuning(model, train_games, train_labels, test_games, test_labels, loss_fn, n_samples=1000):
+def evaluate_model_finetuning(
+    model, train_games, train_labels, test_games, test_labels, loss_fn, n_samples=1000
+):
     """Logs test and train set loss."""
     train_indices = t.randperm(train_games.size(0))[:n_samples]
-    test_indices  = t.randperm(test_games.size(0))[:n_samples]
+    test_indices = t.randperm(test_games.size(0))[:n_samples]
     train_sample = train_games[train_indices]
     train_sample_labels = train_labels[train_indices]
     test_sample = test_games[test_indices]
@@ -40,19 +52,33 @@ def evaluate_model_finetuning(model, train_games, train_labels, test_games, test
     model.eval()
     with t.no_grad():
         train_logits = model(train_sample)
-        test_logits  = model(test_sample)
-        train_loss = loss_fn(rearrange(train_logits), rearrange(train_sample_labels)).item()
-        test_loss  = loss_fn(rearrange(test_logits), rearrange(test_sample_labels)).item()
+        test_logits = model(test_sample)
+        train_loss = loss_fn(
+            rearrange(train_logits), rearrange(train_sample_labels)
+        ).item()
+        test_loss = loss_fn(
+            rearrange(test_logits), rearrange(test_sample_labels)
+        ).item()
 
-    wandb.log({
-        "finetune/train": train_loss,
-        "finetune/test": test_loss,
-    })
+    wandb.log(
+        {
+            "finetune/train": train_loss,
+            "finetune/test": test_loss,
+        }
+    )
 
 
-def finetune_strong_with_weak(project_name: str, 
-                              weak_model, weak_model_size: str, strong_model, strong_model_size: str, 
-                              weak_train_data: TicTacToeData, val_data: TicTacToeData, test_data: TicTacToeData, training_cfg: dict) -> tuple:
+def finetune_strong_with_weak(
+    project_name: str,
+    weak_model,
+    weak_model_size: str,
+    strong_model,
+    strong_model_size: str,
+    weak_train_data: TicTacToeData,
+    val_data: TicTacToeData,
+    test_data: TicTacToeData,
+    training_cfg: dict,
+) -> tuple:
     """
     Early stopping by checkpointing after every optimizer step, then early stop with patience 1.
     """
@@ -77,7 +103,9 @@ def finetune_strong_with_weak(project_name: str,
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     loss_fn = cross_entropy
-    optimizer =  t.optim.AdamW(strong_model.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = t.optim.AdamW(
+        strong_model.parameters(), lr=lr, weight_decay=weight_decay
+    )
 
     wandb.finish()  # in case a previous run is still active
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
@@ -97,27 +125,42 @@ def finetune_strong_with_weak(project_name: str,
             "max_epochs": max_epochs,
             "early_stopping_patience": early_stopping_patience,
             "batch_size": batch_size,
-        }
+        },
     )
 
     # Finetuning loop: train strong_model to match the weak_model predictions
     log_generating_game_wandb(strong_model)
     evaluate_model(strong_model, weak_train_data, test_data, loss_fn, n_samples=20000)
-    evaluate_model_finetuning(strong_model, weak_train_data.games_data, train_weak_labels, test_data.games_data, test_weak_labels, loss_fn)
+    evaluate_model_finetuning(
+        strong_model,
+        weak_train_data.games_data,
+        train_weak_labels,
+        test_data.games_data,
+        test_weak_labels,
+        loss_fn,
+    )
 
-    best_val_loss_epoch = float('inf')
-    best_val_loss_batch = float('inf')
+    best_val_loss_epoch = float("inf")
+    best_val_loss_batch = float("inf")
     best_epoch = 0
     patience_counter = 0
     best_model_state = None
     n_datapoints_since_last_evaluation = 0
     n_datapoints_since_last_generation_evaluation = 0
-    for epoch in tqdm(range(max_epochs), desc="Training epochs", position=0, dynamic_ncols=True):
+    for epoch in tqdm(
+        range(max_epochs), desc="Training epochs", position=0, dynamic_ncols=True
+    ):
         # -------------------------
         # Training Phase (mini-batch loop)
         # -------------------------
         strong_model.train()
-        for games, labels in tqdm(train_loader, desc="Training batches", leave=False, position=1, dynamic_ncols=True):
+        for games, labels in tqdm(
+            train_loader,
+            desc="Training batches",
+            leave=False,
+            position=1,
+            dynamic_ncols=True,
+        ):
             optimizer.zero_grad()
             logits = strong_model(games)
 
@@ -128,8 +171,17 @@ def finetune_strong_with_weak(project_name: str,
             n_datapoints_since_last_evaluation += batch_size
             if n_datapoints_since_last_evaluation > 0:
                 n_datapoints_since_last_evaluation = 0
-                evaluate_model(strong_model, weak_train_data, test_data, loss_fn, n_samples=20000)
-                evaluate_model_finetuning(strong_model, weak_train_data.games_data, train_weak_labels, test_data.games_data, test_weak_labels, loss_fn)
+                evaluate_model(
+                    strong_model, weak_train_data, test_data, loss_fn, n_samples=20000
+                )
+                evaluate_model_finetuning(
+                    strong_model,
+                    weak_train_data.games_data,
+                    train_weak_labels,
+                    test_data.games_data,
+                    test_weak_labels,
+                    loss_fn,
+                )
 
             n_datapoints_since_last_generation_evaluation += batch_size
             if n_datapoints_since_last_generation_evaluation > 10000:
@@ -140,11 +192,13 @@ def finetune_strong_with_weak(project_name: str,
             strong_model.eval()
             with t.no_grad():
                 val_logits = strong_model(val_data.games_data)
-                val_loss = loss_fn(rearrange(val_logits), rearrange(val_data.weak_goals_labels)).item()
-            
+                val_loss = loss_fn(
+                    rearrange(val_logits), rearrange(val_data.weak_goals_labels)
+                ).item()
+
             wandb.log({"val/val_loss_batch": val_loss})
             if False:  # THIS MEANS NO EARLY STOPPING SAVING!
-            # if val_loss < best_val_loss_batch:
+                # if val_loss < best_val_loss_batch:
                 best_val_loss_batch = val_loss
                 best_model_state = strong_model.state_dict()
 
@@ -159,7 +213,9 @@ def finetune_strong_with_weak(project_name: str,
         wandb.log({"val/val_loss_epoch": val_loss, "val/best_epoch": best_epoch})
 
         if patience_counter >= early_stopping_patience:
-            print(f"Early stopping triggered at epoch {epoch}. Best epoch was {best_epoch} with val loss {best_val_loss_epoch:.4f}")
+            print(
+                f"Early stopping triggered at epoch {epoch}. Best epoch was {best_epoch} with val loss {best_val_loss_epoch:.4f}"
+            )
             break
 
     if best_model_state is not None:
@@ -170,37 +226,72 @@ def finetune_strong_with_weak(project_name: str,
     return strong_model, experiment_name, run_id
 
 
-def finetune_sweep(pretrained_project_name: str, finetuned_project_name: str, experiment_folder: str,
-                   weak_finetune_data: TicTacToeData, val_data: TicTacToeData, test_data: TicTacToeData,
-                   training_cfg: dict, device: t.device) -> None:
+def finetune_sweep(
+    pretrained_project_name: str,
+    finetuned_project_name: str,
+    experiment_folder: str,
+    weak_finetune_data: TicTacToeData,
+    val_data: TicTacToeData,
+    test_data: TicTacToeData,
+    training_cfg: dict,
+    device: t.device,
+) -> None:
     model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
-    
+
     for i, weak_size in enumerate(model_sizes):
-        weak_model = load_model(pretrained_project_name, weak_size, Goal.WEAK_GOAL, experiment_folder, device)
+        weak_model = load_model(
+            pretrained_project_name,
+            weak_size,
+            Goal.WEAK_GOAL,
+            experiment_folder,
+            device,
+        )
         if not weak_model:
             print(f"Weak model of size {weak_size} not found, skipping.")
             continue
-        
+
         for j in range(i + 1, len(model_sizes)):
             strong_size = model_sizes[j]
-            matching_files = load_finetuned_model_get_matching_files(finetuned_project_name, weak_size, strong_size, experiment_folder)
+            matching_files = load_finetuned_model_get_matching_files(
+                finetuned_project_name, weak_size, strong_size, experiment_folder
+            )
             if matching_files:
-                print(f"Finetuned {strong_size} to {weak_size} already exists. Skipping ...")
+                print(
+                    f"Finetuned {strong_size} to {weak_size} already exists. Skipping ..."
+                )
             else:
-                strong_model = load_model(pretrained_project_name, strong_size, Goal.STRONG_GOAL, experiment_folder, device)
+                strong_model = load_model(
+                    pretrained_project_name,
+                    strong_size,
+                    Goal.STRONG_GOAL,
+                    experiment_folder,
+                    device,
+                )
                 if not strong_model:
                     print(f"Strong model of size {strong_size} not found, skipping.")
                     continue
 
                 finetuned_model = deepcopy(strong_model)
-                print(f"Finetuning: weak model ({weak_size}) -> strong model ({strong_size})")
-                
+                print(
+                    f"Finetuning: weak model ({weak_size}) -> strong model ({strong_size})"
+                )
+
                 finetuned_model, experiment_name, run_id = finetune_strong_with_weak(
                     finetuned_project_name,
-                    weak_model, weak_size,
-                    finetuned_model, strong_size,
-                    weak_finetune_data, val_data, test_data,
-                    training_cfg
+                    weak_model,
+                    weak_size,
+                    finetuned_model,
+                    strong_size,
+                    weak_finetune_data,
+                    val_data,
+                    test_data,
+                    training_cfg,
                 )
                 # Save the finetuned model.
-                save_model(finetuned_model, run_id, finetuned_project_name, experiment_name, experiment_folder)
+                save_model(
+                    finetuned_model,
+                    run_id,
+                    finetuned_project_name,
+                    experiment_name,
+                    experiment_folder,
+                )

@@ -7,6 +7,7 @@ import torch.multiprocessing as mp
 from multiprocessing import Manager
 import random
 
+
 def worker(gpu_id: int, task_queue):
     """Worker loop: bind to GPU, pull jobs from queue, do dummy work."""
     torch.cuda.set_device(gpu_id)
@@ -24,10 +25,8 @@ def worker(gpu_id: int, task_queue):
         x = torch.randn(500, 500, device=gpu_id)
         y = x @ x.T
         time.sleep(random.random())
-        print(
-            f"[Worker {gpu_id}] finished run {run_id}, "
-            f"norm={y.norm().item():.2f}"
-        )
+        print(f"[Worker {gpu_id}] finished run {run_id}, norm={y.norm().item():.2f}")
+
 
 def main():
     ngpus = torch.cuda.device_count()
@@ -56,6 +55,7 @@ def main():
         p.join()
 
     print("All runs completed.")
+
 
 if __name__ == "__main__":
     main()

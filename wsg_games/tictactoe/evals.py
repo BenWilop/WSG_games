@@ -1,20 +1,17 @@
-import math
-from typing import Optional
-from enum import Enum
-from copy import deepcopy
 import torch as t
 from torch import Tensor
 from jaxtyping import Float
 from transformer_lens import HookedTransformer
-from collections import Counter
-import random
 
 
 from wsg_games.tictactoe.data import TicTacToeData
-from wsg_games.tictactoe.game import get_best_moves, Board, State
+from wsg_games.tictactoe.game import Board, State
 
 
-def evaluate_predictions(predictions: Float[Tensor, "n_games game_length n_tokens"], tictactoe_data: TicTacToeData) -> dict[str, float]:
+def evaluate_predictions(
+    predictions: Float[Tensor, "n_games game_length n_tokens"],
+    tictactoe_data: TicTacToeData,
+) -> dict[str, float]:
     """
     Returns dictionary metric -> value
     weak_accuracy, strong_accuracy = percentage of moves where the model predicted one of the valid moves
@@ -27,15 +24,21 @@ def evaluate_predictions(predictions: Float[Tensor, "n_games game_length n_token
     n_games, game_length, _ = predictions.shape
     game_indices = t.arange(n_games).unsqueeze(1).expand(n_games, game_length)
     move_indices = t.arange(game_length).unsqueeze(0).expand(n_games, game_length)
-    weak_correct = (tictactoe_data.weak_goals_labels[game_indices, move_indices, pred_indices] > 0)
-    res['weak_accuracy'] = weak_correct.float().mean().item()
-    strong_correct = (tictactoe_data.strong_goals_labels[game_indices, move_indices, pred_indices] > 0)
-    res['strong_accuracy'] = strong_correct.float().mean().item()
+    weak_correct = (
+        tictactoe_data.weak_goals_labels[game_indices, move_indices, pred_indices] > 0
+    )
+    res["weak_accuracy"] = weak_correct.float().mean().item()
+    strong_correct = (
+        tictactoe_data.strong_goals_labels[game_indices, move_indices, pred_indices] > 0
+    )
+    res["strong_accuracy"] = strong_correct.float().mean().item()
 
     # Move is legal if the random move label is positive.
-    illegal_mask = (tictactoe_data.random_move_labels == 0).float()  # shape: [n_games, game_length, n_tokens]
+    illegal_mask = (
+        tictactoe_data.random_move_labels == 0
+    ).float()  # shape: [n_games, game_length, n_tokens]
     illegal_move_chance = (predictions * illegal_mask).sum(dim=-1).mean().item()
-    res['illegal_move_chance'] = illegal_move_chance
+    res["illegal_move_chance"] = illegal_move_chance
 
     return res
 

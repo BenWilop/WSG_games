@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import torch
 from torch.nn.functional import softmax
-from dataclasses import dataclass
 import matplotlib.colors as mcolors
 from matplotlib.cm import ScalarMappable
 
@@ -21,12 +19,12 @@ def visualize_game(data: TicTacToeData, game_id: int, model):
 
     # Build board
     board_states = []
-    board = [''] * 9
-    current_player = 'X'
+    board = [""] * 9
+    current_player = "X"
     for move in game_moves:
         if move < 9:
             board[move] = current_player
-            current_player = 'O' if current_player == 'X' else 'X'
+            current_player = "O" if current_player == "X" else "X"
         board_states.append(board.copy())
     n_moves = len(board_states)
 
@@ -46,13 +44,13 @@ def visualize_game(data: TicTacToeData, game_id: int, model):
         random_label = data.random_move_labels[game_id, i, :]
         weak_label = data.weak_goals_labels[game_id, i, :]
         strong_label = data.strong_goals_labels[game_id, i, :]
-        distributions = [
-            model_label,
-            random_label,
-            weak_label,
-            strong_label
+        distributions = [model_label, random_label, weak_label, strong_label]
+        titles = [
+            "Model Output",
+            "Random Label",
+            "Weak Goal Label",
+            "Strong Goal Label",
         ]
-        titles = ['Model Output', 'Random Label', 'Weak Goal Label', 'Strong Goal Label']
 
         # Plot
         for j, (dist, title_prefix) in enumerate(zip(distributions, titles)):
@@ -62,7 +60,7 @@ def visualize_game(data: TicTacToeData, game_id: int, model):
             end_game_prob = dist[9]
 
             # Color map
-            im = ax.imshow(board_grid, vmin=0, vmax=1, cmap='viridis')
+            im = ax.imshow(board_grid, vmin=0, vmax=1, cmap="viridis")
             ax.set_title(f"{title_prefix} (End-of-game: {end_game_prob:.2f})")
             ax.set_xticks([])
             ax.set_yticks([])
@@ -71,15 +69,22 @@ def visualize_game(data: TicTacToeData, game_id: int, model):
             for pos, symbol in enumerate(current_state):
                 if symbol:  # if the cell is occupied
                     row, col = divmod(pos, 3)
-                    ax.text(col, row, symbol, ha='center', va='center',
-                            fontsize=16, color='white')
+                    ax.text(
+                        col,
+                        row,
+                        symbol,
+                        ha="center",
+                        va="center",
+                        fontsize=16,
+                        color="white",
+                    )
 
     # Color legend
     norm = mcolors.Normalize(vmin=0, vmax=1)
-    sm = ScalarMappable(norm=norm, cmap='viridis')
+    sm = ScalarMappable(norm=norm, cmap="viridis")
     sm.set_array([])
     cbar_ax = fig.add_axes([0.95, 0.15, 0.03, 0.7])
-    fig.colorbar(sm, cax=cbar_ax, orientation='vertical')
+    fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
     plt.tight_layout(rect=[0, 0, 0.93, 1])
 
     plt.show()

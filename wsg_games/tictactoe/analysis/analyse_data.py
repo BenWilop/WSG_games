@@ -3,7 +3,6 @@ import torch as t
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import Counter
-from dataclasses import dataclass
 
 
 from wsg_games.tictactoe.evals import evaluate_predictions
@@ -16,11 +15,12 @@ def entropy(labels: t.Tensor) -> float:
     assert t.allclose(
         labels.sum(dim=2),
         t.ones((labels.size(0), labels.size(1)), device=labels.device),
-        atol=1e-6
+        atol=1e-6,
     ), "Each row of `labels` must sum to 1.0"
     distribution = dist.Categorical(probs=labels)
     ent = distribution.entropy()
     return ent.mean().item()
+
 
 def print_data_statistics(tictactoe_data: TicTacToeData) -> None:
     """Prints shape, train and test CE loss, and entropy of the data."""
@@ -29,15 +29,24 @@ def print_data_statistics(tictactoe_data: TicTacToeData) -> None:
     print("Shape Weak:   ", tictactoe_data.weak_goals_labels.shape)
     print("Shape Strong: ", tictactoe_data.strong_goals_labels.shape)
     print("--------------------------------------------------------")
-    print("Evals Random: ", evaluate_predictions(tictactoe_data.random_move_labels, tictactoe_data))
-    print("Evals Weak:   ", evaluate_predictions(tictactoe_data.weak_goals_labels, tictactoe_data))
-    print("Evals Strong: ", evaluate_predictions(tictactoe_data.strong_goals_labels, tictactoe_data))
+    print(
+        "Evals Random: ",
+        evaluate_predictions(tictactoe_data.random_move_labels, tictactoe_data),
+    )
+    print(
+        "Evals Weak:   ",
+        evaluate_predictions(tictactoe_data.weak_goals_labels, tictactoe_data),
+    )
+    print(
+        "Evals Strong: ",
+        evaluate_predictions(tictactoe_data.strong_goals_labels, tictactoe_data),
+    )
     print("--------------------------------------------------------")
     print("Entropy Random: ", entropy(tictactoe_data.random_move_labels))
     print("Entropy Weak:   ", entropy(tictactoe_data.weak_goals_labels))
     print("Entropy Strong: ", entropy(tictactoe_data.strong_goals_labels))
     print("--------------------------------------------------------")
-    
+
 
 def get_all_prefixes(games_data: t.Tensor) -> set[tuple[int]]:
     """
@@ -54,12 +63,14 @@ def get_all_prefixes(games_data: t.Tensor) -> set[tuple[int]]:
     return prefixes
 
 
-def calculate_leakage_percentage(train_data: TicTacToeData, test_data: TicTacToeData) -> float:
+def calculate_leakage_percentage(
+    train_data: TicTacToeData, test_data: TicTacToeData
+) -> float:
     """
     Computes the percentage of test prefixes (game states) that also appear in the train data.
     """
     train_prefixes = get_all_prefixes(train_data.games_data)
-    
+
     leaked = 0
     total = 0
     test_games = test_data.games_data.cpu()
@@ -84,14 +95,16 @@ def _get_bin_index(count: int, bin_edges: list[int]) -> int:
     return len(bin_edges) - 1
 
 
-def _compute_prefix_histograms(games_tensor: t.Tensor, bin_edges: list[int]) -> tuple[list, list]:
+def _compute_prefix_histograms(
+    games_tensor: t.Tensor, bin_edges: list[int]
+) -> tuple[list, list]:
     """
     Computes the prefix frequency histogram for a given tensor of games.
     Returns two histograms, the k-th element is number of elements in k-th bucket.
     unweighted_hist = duplicate prefixes counted once
     weighted_hist = duplicate prefixes counted multiple times.
     """
-    prefix_counts = Counter()
+    prefix_counts: Counter[tuple[int, ...], int] = Counter()
     games_np = games_tensor.cpu().numpy()
     n_games, game_length = games_np.shape
     for i in range(n_games):
@@ -111,7 +124,9 @@ def _compute_prefix_histograms(games_tensor: t.Tensor, bin_edges: list[int]) -> 
     return unweighted_hist, weighted_hist
 
 
-def _plot_binned_histograms(unweighted_hist: list, weighted_hist: list, title: str, bin_edges: list[str]):
+def _plot_binned_histograms(
+    unweighted_hist: list, weighted_hist: list, title: str, bin_edges: list[int]
+):
     """Plots the result of compute_prefix_histograms."""
     total_unique = sum(unweighted_hist)
     total_occurrences = sum(weighted_hist)
@@ -122,13 +137,13 @@ def _plot_binned_histograms(unweighted_hist: list, weighted_hist: list, title: s
     bin_labels = []
     for i, edge in enumerate(bin_edges):
         bin_labels.append(f"<={edge}")
-    
+
     x = np.arange(len(bin_edges))
     width = 0.35
 
     plt.figure(figsize=(10, 4))
-    plt.bar(x - width/2, unweighted_pct, width, label='Unweighted', color='blue')
-    plt.bar(x + width/2, weighted_pct, width, label='Weighted', color='orange')
+    plt.bar(x - width / 2, unweighted_pct, width, label="Unweighted", color="blue")
+    plt.bar(x + width / 2, weighted_pct, width, label="Weighted", color="orange")
     # plt.yscale("log")
     plt.xlabel("Prefix Frequency Bins")
     plt.ylabel("Percentage")
@@ -138,15 +153,33 @@ def _plot_binned_histograms(unweighted_hist: list, weighted_hist: list, title: s
     plt.show()
 
 
-def plot_train_test_prefix_histograms(train_data: TicTacToeData, test_data: TicTacToeData, bin_edges: list[str]=[1, 10, 100, 1000, 10000, 100000, 1000000]):
+def plot_train_test_prefix_histograms(
+    train_data: TicTacToeData,
+    test_data: TicTacToeData,
+    bin_edges: list[int] = [1, 10, 100, 1000, 10000, 100000, 1000000],
+):
     """
     Left: bin n -> how many unique prefixes have n occurrences in the train data.
     Right: bin n -> how many prefixes have n occurrences in the test data.
     Top: train data
     Bottom: test data
     """
-    train_unweighted, train_weighted = _compute_prefix_histograms(train_data.games_data, bin_edges)
-    test_unweighted, test_weighted = _compute_prefix_histograms(test_data.games_data, bin_edges)
-    
-    _plot_binned_histograms(train_unweighted, train_weighted, "Train Data Prefix Frequency Histogram", bin_edges)
-    _plot_binned_histograms(test_unweighted, test_weighted, "Test Data Prefix Frequency Histogram", bin_edges)
+    train_unweighted, train_weighted = _compute_prefix_histograms(
+        train_data.games_data, bin_edges
+    )
+    test_unweighted, test_weighted = _compute_prefix_histograms(
+        test_data.games_data, bin_edges
+    )
+
+    _plot_binned_histograms(
+        train_unweighted,
+        train_weighted,
+        "Train Data Prefix Frequency Histogram",
+        bin_edges,
+    )
+    _plot_binned_histograms(
+        test_unweighted,
+        test_weighted,
+        "Test Data Prefix Frequency Histogram",
+        bin_edges,
+    )
