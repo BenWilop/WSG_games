@@ -182,7 +182,7 @@ def run_full_training(
     val_data,
     test_data,
     training_cfg: dict,
-    model_cfg: HookedTransformer.Config,
+    model_cfg,
 ) -> tuple[HookedTransformer, str, str]:
     lr = training_cfg.get("learning_rate")
     weight_decay = training_cfg.get("weight_decay")

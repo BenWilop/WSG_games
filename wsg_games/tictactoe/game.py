@@ -137,7 +137,7 @@ class Board:
             case _:
                 raise ValueError(f"Unexpected game state of {self.game_state}")
 
-    def make_move(self, move: int) -> Board:
+    def make_move(self, move: int) -> None:
         if move not in self.get_possible_moves():
             raise ValueError(f"{move} is not a valid move.")
         self.grid[move] = self.turn
