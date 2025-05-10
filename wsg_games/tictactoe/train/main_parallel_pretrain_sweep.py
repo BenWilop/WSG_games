@@ -87,14 +87,14 @@ def worker(
 
 
 def main_pretrain():
-    project_name = "tictactoe_pretrain_forbidden_diagonal_rule_test"
+    project_name = "tictactoe_pretrain_forbidden_diagonal_rule_test2"
     data_folder = "/homes/55/bwilop/wsg/data/"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/"
 
     # Data
     # has to be on CPU, otherwise worker starts working on GPU:0 by default.
     tictactoe_data = cache_tictactoe_data_random(
-        data_folder + "tictactoe_data_random_STRONG_RULE_REVERSE_RULE.pkl", device="cpu"
+        data_folder + "tictactoe_data_random_STRONG_RULE_NO_DIAGONAL.pkl", device="cpu"
     )  # None so data lives on CPU.
     tictactoe_train_data, _, tictactoe_val_data, tictactoe_test_data = (
         train_test_split_tictactoe_first_two_moves_no_overlap(
