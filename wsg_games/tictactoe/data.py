@@ -130,8 +130,9 @@ def calculate_tictactoe_data() -> TicTacToeData:
     return label_games_tensor(games_tensor)
 
 
-def calculate_tictactoe_data_random(n_samples: int) -> TicTacToeData:
+def calculate_tictactoe_data_random(n_samples: int, seed=None) -> TicTacToeData:
     """Generate n_samples random games. Only used for investigation because the games can have duplicates."""
+    rng = np.random.default_rng(seed)
     games = []
     for _ in tqdm(range(n_samples), desc="Generating random games"):
         board = Board()
@@ -139,7 +140,7 @@ def calculate_tictactoe_data_random(n_samples: int) -> TicTacToeData:
             legal_moves = board.get_possible_moves()
             if not legal_moves:
                 break
-            move = np.random.choice(legal_moves)
+            move = rng.choice(legal_moves)
             board.make_move(move)
         games.append(board)
     games_tensor = t.tensor(
@@ -182,7 +183,7 @@ def train_test_split_tictactoe_first(
 
     num_games = len(tictactoe_data.games_data)
 
-    inds = t.randperm(num_games, generator=t.Generator().manual_seed(seed))
+    inds = t.randperm(num_games, generator=t.Generator(device="cpu").manual_seed(seed))
 
     n_train = int(train_ratio * num_games)
     n_finetune = int(weak_finetune_ratio * num_games)
@@ -224,7 +225,8 @@ def train_test_split_tictactoe_first_two_moves_no_overlap(
 
     unique_first_two_moves = t.unique(tictactoe_data.games_data[:, :3], dim=0)
     shuffled_indices = t.randperm(
-        len(unique_first_two_moves), generator=t.Generator().manual_seed(seed)
+        len(unique_first_two_moves),
+        generator=t.Generator(device="cpu").manual_seed(seed),
     )
 
     n_1 = n_first_two_train
@@ -269,12 +271,20 @@ def random_sample_tictactoe_data(
     return sampled_data
 
 
-def sample_hard_labels_from_soft(soft_labels: t.Tensor, num_samples) -> t.Tensor:
+def sample_hard_labels_from_soft(
+    soft_labels: t.Tensor, num_samples: int, generator: t.Generator | None = None
+) -> t.Tensor:
     """If multiple moves are possible, create labels that have exactly one of them a 1 and rest 0."""
     n_games, game_length, n_tokens = soft_labels.shape
     soft_labels_flat = soft_labels.view(-1, n_tokens)
+    assert t.all(soft_labels >= 0.0), "All elements in soft_labels must be non-negative"
+    assert t.allclose(
+        soft_labels.sum(dim=2),
+        t.ones((soft_labels.size(0), soft_labels.size(1)), device=soft_labels.device),
+        atol=1e-6,
+    ), "Each row (dimension 2) of `soft_labels` must sum to 1.0"
     sampled_indices = t.multinomial(
-        soft_labels_flat, num_samples=num_samples, replacement=True
+        soft_labels_flat, num_samples=num_samples, replacement=True, generator=generator
     )
 
     one_hot_samples = F.one_hot(sampled_indices, num_classes=n_tokens).float()
@@ -287,22 +297,25 @@ def sample_hard_labels_from_soft(soft_labels: t.Tensor, num_samples) -> t.Tensor
 
 
 def create_hard_label_tictactoe_data(
-    data: TicTacToeData, num_samples, random_seed: int = 4567
+    data: TicTacToeData,
+    num_samples,
+    seed: int | None = None,  # Only here hardcoded to create generator
 ) -> TicTacToeData:
     """
     Samples for weak and strong goal one fixed trajectory.
     The random samples stay the same to make it easier to check for illegal moves.
     """
-    t.manual_seed(random_seed)
     new_games_data = data.games_data.repeat_interleave(num_samples, dim=0)
     new_random_move_labels = data.random_move_labels.repeat_interleave(
         num_samples, dim=0
     )
+    device = data.games_data.device
+    generator = t.Generator(device=device).manual_seed(seed)
     new_weak_goals_labels = sample_hard_labels_from_soft(
-        data.weak_goals_labels, num_samples=num_samples
+        data.weak_goals_labels, num_samples=num_samples, generator=generator
     )
     new_strong_goals_labels = sample_hard_labels_from_soft(
-        data.strong_goals_labels, num_samples=num_samples
+        data.strong_goals_labels, num_samples=num_samples, generator=generator
     )
     return TicTacToeData(
         games_data=new_games_data,
@@ -341,7 +354,9 @@ def cache_tictactoe_data(path: str, device: t.device) -> TicTacToeData:
     return data
 
 
-def cache_tictactoe_data_random(path: str, device: t.device) -> TicTacToeData:
+def cache_tictactoe_data_random(
+    path: str, device: t.device, seed: int | None = None
+) -> TicTacToeData:
     """calculate_tictactoe_data_random and save or load cache"""
     if os.path.exists(path):
         with open(path, "rb") as f:
@@ -350,7 +365,7 @@ def cache_tictactoe_data_random(path: str, device: t.device) -> TicTacToeData:
             f"Data loaded from {path} is not a TicTacToeData object"
         )
     else:
-        data = calculate_tictactoe_data_random(200000)
+        data = calculate_tictactoe_data_random(200000, seed=seed)
         with open(path, "wb") as f:
             pickle.dump(data, f)
 
