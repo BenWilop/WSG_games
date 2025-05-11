@@ -12,7 +12,7 @@ class Job:
     Represents a job to be executed, containing the function and its arguments.
     """
 
-    function: Callable
+    function: Callable  # needs to accept device as the first argument!
     args: Tuple[Any, ...]
 
 
@@ -31,20 +31,10 @@ def _gpu_worker(
     while True:
         try:
             job: Job = task_queue.get_nowait()
-            print(
-                f"[Worker {gpu_id}] starting job: {job.function.__name__} with args (first 5): {str(job.args)[:100]}..."
-            )
-            # Pass the device to the job function if it's designed to accept it
-            # This requires the target function to potentially handle a 'device' kwarg
-            # or the device to be part of job.args if explicitly needed by the function
-            # For this refactor, we'll assume the function might need the device
-            # and can be designed to accept it as the first argument or a keyword argument.
-            # A common pattern is to pass it as a keyword argument if the function supports it.
-            # Or, as in the original code, make device part of the arguments.
-            # For simplicity, let's modify the job function to accept gpu_id or device as an arg.
+            print(f"[Worker {gpu_id}] starting job: {job.function.__name__}")
             job.args = (
-                gpu_id,
-            ) + job.args  # Prepend gpu_id to args for the job function
+                device,
+            ) + job.args  # Prepend device to args for the job function
             job.function(*job.args)
             print(f"[Worker {gpu_id}] finished job: {job.function.__name__}")
             t.cuda.empty_cache()
@@ -53,9 +43,8 @@ def _gpu_worker(
             break
         except Exception as e:
             print(f"[Worker {gpu_id}] encountered an error: {e}")
-            # Optionally, put the job back in the queue or log it for retrial
-            t.cuda.empty_cache()  # Ensure cache is cleared even on error
-            break  # Exit worker on error to prevent loops, or implement more robust error handling
+            t.cuda.empty_cache()
+            break
 
 
 class ParallelGpuExecutor:
