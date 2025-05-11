@@ -14,24 +14,32 @@ def evaluate_predictions(
 ) -> dict[str, float]:
     """
     Returns dictionary metric -> value
-    weak_accuracy, strong_accuracy = percentage of moves where the model predicted one of the valid moves
+    weak_accuracy, strong_accuracy
+    - percentage weight of models predictions on correct moves
+    - Example: label = [0.5, 0.5, 0], predictions = [0.1, 0.3, 0.6] -> accuracy = 0.4
     illegal_move_chance
+    - Example: legal_moves = [1, 0, 1], predictions = [0.1, 0.3, 0.6] -> illegal_move_chance = 0.7
     """
     res = {}
 
-    # Pprediction is correct if the max token has a positive label.
-    pred_indices = t.argmax(predictions, dim=-1)  # shape: [n_games, game_length]
-    n_games, game_length, _ = predictions.shape
-    game_indices = t.arange(n_games).unsqueeze(1).expand(n_games, game_length)
-    move_indices = t.arange(game_length).unsqueeze(0).expand(n_games, game_length)
-    weak_correct = (
-        tictactoe_data.weak_goals_labels[game_indices, move_indices, pred_indices] > 0
-    )
-    res["weak_accuracy"] = weak_correct.float().mean().item()
-    strong_correct = (
-        tictactoe_data.strong_goals_labels[game_indices, move_indices, pred_indices] > 0
-    )
-    res["strong_accuracy"] = strong_correct.float().mean().item()
+    # Accuracy = percentage weight of models predictions on correct moves
+    positive_weak_labels_mask = (
+        tictactoe_data.weak_goals_labels > 0
+    ).float()  # Shape: [n_games, game_length, n_tokens]
+    predictions_on_positive_weak = predictions * positive_weak_labels_mask
+    sum_of_weights_on_positive_weak = predictions_on_positive_weak.sum(
+        dim=-1
+    )  # Shape: [n_games, game_length]
+    res["weak_accuracy"] = sum_of_weights_on_positive_weak.mean().item()
+
+    positive_strong_labels_mask = (
+        tictactoe_data.strong_goals_labels > 0
+    ).float()  # Shape: [n_games, game_length, n_tokens]
+    predictions_on_positive_strong = predictions * positive_strong_labels_mask
+    sum_of_weights_on_positive_strong = predictions_on_positive_strong.sum(
+        dim=-1
+    )  # Shape: [n_games, game_length]
+    res["strong_accuracy"] = sum_of_weights_on_positive_strong.mean().item()
 
     # Move is legal if the random move label is positive.
     illegal_mask = (

@@ -113,7 +113,7 @@ def main_pretrain():
 
     training_cfg = get_training_cfg()
 
-    # Tasts
+    # Tasks
     model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
     goals = [Goal.WEAK_GOAL, Goal.STRONG_GOAL]
     tasks = [(goal, model_size) for goal in goals for model_size in model_sizes]
