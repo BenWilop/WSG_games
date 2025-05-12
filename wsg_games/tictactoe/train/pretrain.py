@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import torch as t
 from torch.nn.functional import cross_entropy
 from einops import rearrange
+import pandas as pd
+import seaborn as sns
 
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.data import random_sample_tictactoe_data
@@ -68,91 +70,121 @@ def compute_avg_loss(model, games_data, labels, batch_size=1000):
 
 
 def plot_loss_pretrain_models(
-    experiment_folder, project_name, test_data, device: t.device
+    experiment_folder,
+    project_name,
+    test_data,
+    device: t.device,
+    indices=int | list[int | None] | None,
 ) -> None:
     minimal_loss_weak = 0.6561687588691711
     minimal_loss_strong = 0.5871079564094543
 
-    data_by_goal = {
-        Goal.WEAK_GOAL: {
-            "params": [],
-            "random_loss": [],
-            "weak_loss": [],
-            "strong_loss": [],
-        },
-        Goal.STRONG_GOAL: {
-            "params": [],
-            "random_loss": [],
-            "weak_loss": [],
-            "strong_loss": [],
-        },
-    }
+    # Indices
+    if type(indices) == int:
+        indices = [indices]
+    elif indices is None:
+        max_idx = -1
+        for i in range(100):
+            if load_model_get_matching_files(
+                project_name, "nano", Goal.WEAK_GOAL, experiment_folder, i
+            ):
+                max_idx = i
+                break
+        indices = [i for i in range(max_idx + 1)]
 
-    for model_size in [
-        "nano",
-        "micro",
-        "mini",
-        "small",
-        "medium",
-        "large",
-        "huge",
-        "gigantic",
-    ]:
-        for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
-            model = load_model(
-                project_name, model_size, goal, experiment_folder, device
-            )
-            if not model:
-                continue
+    # Evaluate models
+    results = []
+    for index in indices:
+        for model_size in [
+            "nano",
+            "micro",
+            "mini",
+            "small",
+            "medium",
+            "large",
+            "huge",
+            "gigantic",
+        ]:
+            for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
+                model = load_model(
+                    project_name, model_size, goal, experiment_folder, device, index
+                )
+                if not model:
+                    print("Missing: ", index, model_size, goal)
+                    continue
 
-            # Evaluate
-            n_parameters = count_parameters(model)
-            test_sample = random_sample_tictactoe_data(test_data, 10000)
+                # Evaluate
+                n_parameters = count_parameters(model)
+                test_sample = random_sample_tictactoe_data(test_data, 10000)
 
-            avg_random_loss = compute_avg_loss(
-                model, test_sample.games_data, test_sample.random_move_labels
-            )
-            avg_weak_loss = compute_avg_loss(
-                model, test_sample.games_data, test_sample.weak_goals_labels
-            )
-            avg_strong_loss = compute_avg_loss(
-                model, test_sample.games_data, test_sample.strong_goals_labels
-            )
+                avg_random_loss = compute_avg_loss(
+                    model, test_sample.games_data, test_sample.random_move_labels
+                )
+                avg_weak_loss = compute_avg_loss(
+                    model, test_sample.games_data, test_sample.weak_goals_labels
+                )
+                avg_strong_loss = compute_avg_loss(
+                    model, test_sample.games_data, test_sample.strong_goals_labels
+                )
 
-            data_by_goal[goal]["params"].append(n_parameters)
-            data_by_goal[goal]["random_loss"].append(avg_random_loss)
-            data_by_goal[goal]["weak_loss"].append(avg_weak_loss)
-            data_by_goal[goal]["strong_loss"].append(avg_strong_loss)
+                results.append(
+                    {
+                        "index": index
+                        if index is not None
+                        else -1,  # -1 as placeholder for None to make df easier
+                        "goal": goal,
+                        "model_size": model_size,
+                        "n_parameters": n_parameters,
+                        "avg_random_loss": avg_random_loss,
+                        "avg_weak_loss": avg_weak_loss,
+                        "avg_strong_loss": avg_strong_loss,
+                    }
+                )
 
-            # Clean memory
-            model.cpu()
-            del model
-            t.cuda.empty_cache()
+                # Clean memory
+                model.cpu()
+                del model
+                t.cuda.empty_cache()
 
-    print(data_by_goal)
+    # Plot
+    df = pd.DataFrame(results)
+    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
-    # Create a figure with two subplots (side-by-side)
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
-    # Plot for models with WEAK_GOAL
+    # Left (Performance on weak rule)
     ax = axes[0]
-    ax.plot(
-        data_by_goal[Goal.WEAK_GOAL]["params"],
-        data_by_goal[Goal.WEAK_GOAL]["random_loss"],
-        "o-",
+    df_weak = df[df["goal"] == Goal.WEAK_GOAL]
+    sns.lineplot(  # Random
+        data=df_weak,
+        x="n_parameters",
+        y="avg_random_loss",
         label="Random CE Loss",
+        marker="o",
+        linestyle="-",
+        errorbar="sd",
+        ax=ax,
+        legend=False,
     )
-    ax.plot(
-        data_by_goal[Goal.WEAK_GOAL]["params"],
-        data_by_goal[Goal.WEAK_GOAL]["weak_loss"],
-        "s-",
+    sns.lineplot(  # Weak
+        data=df_weak,
+        x="n_parameters",
+        y="avg_weak_loss",
         label="Weak CE Loss",
+        marker="s",
+        linestyle="-",
+        errorbar="sd",
+        ax=ax,
+        legend=False,
     )
-    ax.plot(
-        data_by_goal[Goal.WEAK_GOAL]["params"],
-        data_by_goal[Goal.WEAK_GOAL]["strong_loss"],
-        "d-",
+    sns.lineplot(  # Strong
+        data=df_weak,
+        x="n_parameters",
+        y="avg_strong_loss",
         label="Strong CE Loss",
+        marker="d",
+        linestyle="-",
+        errorbar="sd",
+        ax=ax,
+        legend=False,
     )
     ax.axhline(
         y=minimal_loss_weak,
@@ -160,34 +192,49 @@ def plot_loss_pretrain_models(
         linestyle="--",
         label="Min Achievable Weak Loss",
     )
-
     ax.set_xscale("log")
-    ax.set_ylim(0, 6.5)
+    ax.set_ylim(0, 3)
     ax.set_xlabel("Number of Parameters (log scale)")
-    ax.set_ylabel("Loss")
-    ax.set_title("Loss vs. Params (Model trained on Goal: WEAK_GOAL)")
+    ax.set_ylabel("Loss (μ ± σ over indices)")
+    ax.set_title(f"Loss vs. Params (Model trained on Goal: {Goal.WEAK_GOAL.value})")
     ax.legend()
     ax.grid(True, which="both", ls="--")
 
-    # Plot for models with STRONG_GOAL
+    # Right (Performance on strong rule)
     ax = axes[1]
-    ax.plot(
-        data_by_goal[Goal.STRONG_GOAL]["params"],
-        data_by_goal[Goal.STRONG_GOAL]["random_loss"],
-        "o-",
+    df_strong = df[df["goal"] == Goal.STRONG_GOAL]
+    sns.lineplot(  # Random
+        data=df_strong,
+        x="n_parameters",
+        y="avg_random_loss",
         label="Random CE Loss",
+        marker="o",
+        linestyle="-",
+        errorbar="sd",
+        ax=ax,
+        legend=False,
     )
-    ax.plot(
-        data_by_goal[Goal.STRONG_GOAL]["params"],
-        data_by_goal[Goal.STRONG_GOAL]["weak_loss"],
-        "s-",
+    sns.lineplot(  # Weak
+        data=df_strong,
+        x="n_parameters",
+        y="avg_weak_loss",
         label="Weak CE Loss",
+        marker="s",
+        linestyle="-",
+        errorbar="sd",
+        ax=ax,
+        legend=False,
     )
-    ax.plot(
-        data_by_goal[Goal.STRONG_GOAL]["params"],
-        data_by_goal[Goal.STRONG_GOAL]["strong_loss"],
-        "d-",
+    sns.lineplot(  # Strong
+        data=df_strong,
+        x="n_parameters",
+        y="avg_strong_loss",
         label="Strong CE Loss",
+        marker="d",
+        linestyle="-",
+        errorbar="sd",
+        ax=ax,
+        legend=False,
     )
     ax.axhline(
         y=minimal_loss_strong,
@@ -195,12 +242,11 @@ def plot_loss_pretrain_models(
         linestyle="--",
         label="Min Achievable Strong Loss",
     )
-
     ax.set_xscale("log")
     ax.set_ylim(0, 6.5)
     ax.set_xlabel("Number of Parameters (log scale)")
-    ax.set_ylabel("Loss")
-    ax.set_title("Loss vs. Params (Model trained on Goal: STRONG_GOAL)")
+    ax.set_ylabel("Loss (μ ± σ over indices)")
+    ax.set_title(f"Loss vs. Params (Model trained on Goal: {Goal.STRONG_GOAL.value})")
     ax.legend()
     ax.grid(True, which="both", ls="--")
 
