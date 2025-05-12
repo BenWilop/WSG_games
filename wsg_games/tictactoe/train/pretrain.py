@@ -6,7 +6,11 @@ import pandas as pd
 import seaborn as sns
 
 from wsg_games.tictactoe.game import Goal
-from wsg_games.tictactoe.data import random_sample_tictactoe_data
+from wsg_games.tictactoe.data import (
+    random_sample_tictactoe_data,
+    load_split_data,
+    move_tictactoe_data_to_device,
+)
 from wsg_games.tictactoe.train.train import run_full_training, rearrange
 from wsg_games.tictactoe.train.save_load_models import (
     load_model,
@@ -70,14 +74,14 @@ def compute_avg_loss(model, games_data, labels, batch_size=1000):
 
 
 def plot_loss_pretrain_models(
-    experiment_folder,
-    project_name,
-    test_data,
+    data_folder: str,
+    experiment_folder: str,
+    project_name: str,
     device: t.device,
-    indices=int | list[int | None] | None,
+    indices: int | list[int | None] | None,
 ) -> None:
-    minimal_loss_weak = 0.6561687588691711
-    minimal_loss_strong = 0.5871079564094543
+    minimal_loss_weak = 0.65
+    minimal_loss_strong = 0.61
 
     # Indices
     if type(indices) == int:
@@ -85,16 +89,23 @@ def plot_loss_pretrain_models(
     elif indices is None:
         max_idx = -1
         for i in range(100):
-            if load_model_get_matching_files(
+            if not load_model_get_matching_files(
                 project_name, "nano", Goal.WEAK_GOAL, experiment_folder, i
             ):
                 max_idx = i
                 break
-        indices = [i for i in range(max_idx + 1)]
+        indices = [i for i in range(max_idx)]
+
+    print("Indices: ", indices)
 
     # Evaluate models
     results = []
     for index in indices:
+        # _, _, _, tictactoe_test_data = load_split_data(data_folder, index)
+        tictactoe_test_data, _, _, _ = load_split_data(data_folder, index)
+        tictactoe_test_data = move_tictactoe_data_to_device(
+            tictactoe_test_data, device=device
+        )
         for model_size in [
             "nano",
             "micro",
@@ -103,7 +114,6 @@ def plot_loss_pretrain_models(
             "medium",
             "large",
             "huge",
-            "gigantic",
         ]:
             for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
                 model = load_model(
@@ -115,16 +125,21 @@ def plot_loss_pretrain_models(
 
                 # Evaluate
                 n_parameters = count_parameters(model)
-                test_sample = random_sample_tictactoe_data(test_data, 10000)
 
                 avg_random_loss = compute_avg_loss(
-                    model, test_sample.games_data, test_sample.random_move_labels
+                    model,
+                    tictactoe_test_data.games_data,
+                    tictactoe_test_data.random_move_labels,
                 )
                 avg_weak_loss = compute_avg_loss(
-                    model, test_sample.games_data, test_sample.weak_goals_labels
+                    model,
+                    tictactoe_test_data.games_data,
+                    tictactoe_test_data.weak_goals_labels,
                 )
                 avg_strong_loss = compute_avg_loss(
-                    model, test_sample.games_data, test_sample.strong_goals_labels
+                    model,
+                    tictactoe_test_data.games_data,
+                    tictactoe_test_data.strong_goals_labels,
                 )
 
                 results.append(
@@ -145,6 +160,10 @@ def plot_loss_pretrain_models(
                 model.cpu()
                 del model
                 t.cuda.empty_cache()
+
+    if len(results) == 0:
+        print("No models found.")
+        return
 
     # Plot
     df = pd.DataFrame(results)
@@ -193,7 +212,7 @@ def plot_loss_pretrain_models(
         label="Min Achievable Weak Loss",
     )
     ax.set_xscale("log")
-    ax.set_ylim(0, 3)
+    ax.set_ylim(0, 4)
     ax.set_xlabel("Number of Parameters (log scale)")
     ax.set_ylabel("Loss (μ ± σ over indices)")
     ax.set_title(f"Loss vs. Params (Model trained on Goal: {Goal.WEAK_GOAL.value})")
@@ -243,7 +262,7 @@ def plot_loss_pretrain_models(
         label="Min Achievable Strong Loss",
     )
     ax.set_xscale("log")
-    ax.set_ylim(0, 6.5)
+    ax.set_ylim(0, 4)
     ax.set_xlabel("Number of Parameters (log scale)")
     ax.set_ylabel("Loss (μ ± σ over indices)")
     ax.set_title(f"Loss vs. Params (Model trained on Goal: {Goal.STRONG_GOAL.value})")
