@@ -5,7 +5,7 @@ from tqdm.notebook import tqdm
 from datetime import datetime
 import wandb
 from copy import deepcopy
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 
@@ -244,6 +244,7 @@ def plot_wsg_gap_finetuned_models(
     finetuned_project_name: str,
     device: t.device,
     indices: int | list[int | None] | None,
+    aggregate_data: bool = True,
 ) -> None:
     # Indices
     if type(indices) == int:
@@ -282,7 +283,7 @@ def plot_wsg_gap_finetuned_models(
                 print(
                     f"Model of model_size {model_size} and goal {Goal.WEAK_GOAL} not found, skipping."
                 )
-                return None
+                continue
             index_size_to_avg_weak_loss[(index, model_size)] = compute_avg_loss(
                 model,
                 tictactoe_test_data.games_data,
@@ -311,6 +312,31 @@ def plot_wsg_gap_finetuned_models(
                     f"For weak_size {weak_size} and strong_size {strong_size} not all models exist, skipping."
                 )
                 continue
+
+            # Strong model before finetuning
+            strong_model_on_strong_rule = load_model(
+                pretrained_project_name,
+                strong_size,
+                Goal.STRONG_GOAL,
+                experiment_folder,
+                device=device,
+                index=index,
+            )
+            if not strong_model_on_strong_rule:
+                print(
+                    f"Model of model_size {strong_size} and goal {Goal.STRONG_GOAL} not found, skipping."
+                )
+                continue
+            L_weak_to_strong = compute_avg_loss(
+                strong_model_on_strong_rule,
+                tictactoe_test_data.games_data,
+                tictactoe_test_data.weak_goals_labels,
+            )
+            wsg_gap_before_finetuning = (
+                (L_weak_to_strong - L_weak) / (L_strong_ceiling - L_weak) * 100
+            )
+
+            # Finetuned model (strong -> weak)
             finetuned_model = load_finetuned_model(
                 finetuned_project_name,
                 weak_size,
@@ -329,7 +355,7 @@ def plot_wsg_gap_finetuned_models(
                 tictactoe_test_data.games_data,
                 tictactoe_test_data.weak_goals_labels,
             )
-            recovered_finetuned = (
+            wsg_gap_after_finetuning = (
                 (L_weak_to_strong - L_weak) / (L_strong_ceiling - L_weak) * 100
             )
 
@@ -344,7 +370,8 @@ def plot_wsg_gap_finetuned_models(
                     "strong_size": strong_size,
                     "n_parameters_weak": n_parameters_weak,
                     "n_parameters_strong": n_parameters_strong,
-                    "recovered_finetuned": recovered_finetuned,
+                    "wsg_gap_before_finetuning": wsg_gap_before_finetuning,
+                    "wsg_gap_after_finetuning": wsg_gap_after_finetuning,
                 }
             )
 
@@ -360,36 +387,66 @@ def plot_wsg_gap_finetuned_models(
     # Plot
     df = pd.DataFrame(results)
 
-    plt.figure(figsize=(10, 6))
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6), sharey=True)  # Adjusted figsize
+    plot_configs = [
+        {"y_col": "wsg_gap_before_finetuning", "title": "WSG Gap Before Finetuning"},
+        {"y_col": "wsg_gap_after_finetuning", "title": "WSG Gap After Finetuning"},
+    ]
+    for i, ax in enumerate(axes):
+        config = plot_configs[i]
+        if aggregate_data:  # mu +- std
+            sns.lineplot(
+                data=df,
+                x="n_parameters_strong",
+                y=config["y_col"],
+                hue="weak_size",
+                hue_order=model_sizes,
+                marker="o",
+                errorbar="sd",
+                ax=ax,
+                legend=(i == 0),
+            )
+        else:  # Plot individual lines for each index
+            sns.lineplot(
+                data=df,
+                x="n_parameters_strong",
+                y=config["y_col"],
+                hue="weak_size",
+                hue_order=model_sizes,
+                marker="o",
+                units="index",
+                estimator=None,
+                linewidth=0.7,
+                alpha=0.7,
+                ax=ax,
+                legend=(i == 0),
+            )
 
-    sns.lineplot(
-        data=df,
-        x="n_parameters_strong",
-        y="recovered_finetuned",
-        hue="weak_size",
-        hue_order=model_sizes,
-        marker="o",
-        errorbar="sd",
-        legend="auto",
-    )
+        ax.set_xscale("log")
+        ax.set_xlabel("Strong Model Parameters (log scale)")
+        if i == 0:
+            ax.set_ylabel(
+                f"Recovered % ({'μ ± σ' if aggregate_data else 'individual indices'})"
+            )
+        ax.set_title(config["title"])
+        ax.axhline(0, color="black", linestyle=":", linewidth=0.8)
+        ax.axhline(100, color="blue", linestyle=":", linewidth=0.8)
+        ax.set_yscale("symlog", linthresh=10, linscale=1.0)
+        ax.grid(True, which="both", ls="--")
 
-    plt.xscale("log")
-    plt.xlabel("Strong Model Parameters (log scale)")
-    plt.ylabel("Recovered % (μ ± σ over indices)")
-    plt.title("WSG Gap Recovered by Finetuning vs. Strong Model Size")
+    # Common legend
+    if axes[0].get_legend() is not None:
+        handles, labels = axes[0].get_legend_handles_labels()
+        axes[0].get_legend().remove()
+        fig.legend(
+            handles,
+            labels,
+            title="Weak Model Size",
+            bbox_to_anchor=(0.5, -0.02),
+            loc="upper center",
+            ncol=len(model_sizes) // 2 or 1,
+        )
 
-    plt.axhline(0, color="black", linestyle=":", linewidth=0.8)
-    plt.axhline(
-        100,
-        color="blue",
-        linestyle=":",
-        linewidth=0.8,
-        label="100% Recovery (Strong Ceiling)",
-    )
-
-    plt.yscale("symlog", linthresh=10, linscale=1.0)
-
-    plt.grid(True, which="both", ls="--")
-    plt.legend(title="Weak Model Size", bbox_to_anchor=(1.05, 1), loc="upper left")
-    plt.tight_layout(rect=[0, 0, 0.85, 1])  # Adjust rect for legend outside
+    fig.suptitle("WSG Gap Recovered vs. Strong Model Size", fontsize=16, y=1.02)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])  # Adjust rect for suptitle and fig legend
     plt.show()
