@@ -109,7 +109,7 @@ def finetune_strong_with_weak(
 
     wandb.finish()  # in case a previous run is still active
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    experiment_name = f"experiment_{weak_model_size}_{strong_model_size}_{timestamp}"
+    experiment_name = f"{weak_model_size}_{strong_model_size}_{timestamp}"
     n_weak_train_data = len(weak_train_data.games_data)
     n_val_data = len(val_data.games_data)
     n_test_data = len(test_data.games_data)
@@ -224,74 +224,3 @@ def finetune_strong_with_weak(
     run_id = wandb.run.id
     wandb.finish()
     return strong_model, experiment_name, run_id
-
-
-def finetune_sweep(
-    pretrained_project_name: str,
-    finetuned_project_name: str,
-    experiment_folder: str,
-    weak_finetune_data: TicTacToeData,
-    val_data: TicTacToeData,
-    test_data: TicTacToeData,
-    training_cfg: dict,
-    device: t.device,
-) -> None:
-    model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
-
-    for i, weak_size in enumerate(model_sizes):
-        weak_model = load_model(
-            pretrained_project_name,
-            weak_size,
-            Goal.WEAK_GOAL,
-            experiment_folder,
-            device,
-        )
-        if not weak_model:
-            print(f"Weak model of size {weak_size} not found, skipping.")
-            continue
-
-        for j in range(i + 1, len(model_sizes)):
-            strong_size = model_sizes[j]
-            matching_files = load_finetuned_model_get_matching_files(
-                finetuned_project_name, weak_size, strong_size, experiment_folder
-            )
-            if matching_files:
-                print(
-                    f"Finetuned {strong_size} to {weak_size} already exists. Skipping ..."
-                )
-            else:
-                strong_model = load_model(
-                    pretrained_project_name,
-                    strong_size,
-                    Goal.STRONG_GOAL,
-                    experiment_folder,
-                    device,
-                )
-                if not strong_model:
-                    print(f"Strong model of size {strong_size} not found, skipping.")
-                    continue
-
-                finetuned_model = deepcopy(strong_model)
-                print(
-                    f"Finetuning: weak model ({weak_size}) -> strong model ({strong_size})"
-                )
-
-                finetuned_model, experiment_name, run_id = finetune_strong_with_weak(
-                    finetuned_project_name,
-                    weak_model,
-                    weak_size,
-                    finetuned_model,
-                    strong_size,
-                    weak_finetune_data,
-                    val_data,
-                    test_data,
-                    training_cfg,
-                )
-                # Save the finetuned model.
-                save_model(
-                    finetuned_model,
-                    run_id,
-                    finetuned_project_name,
-                    experiment_name,
-                    experiment_folder,
-                )

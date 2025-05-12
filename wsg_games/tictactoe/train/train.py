@@ -198,7 +198,7 @@ def run_full_training(
 
     wandb.finish()  # In case previous run did not get finished
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    experiment_name = f"experiment_{model_size}_{str(goal)}_{timestamp}"
+    experiment_name = f"{model_size}_{str(goal)}_{timestamp}"
     n_train_data = len(train_data.games_data)
     n_val_data = len(val_data.games_data)
     n_test_data = len(test_data.games_data)
