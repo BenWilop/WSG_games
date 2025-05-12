@@ -431,7 +431,7 @@ def plot_wsg_gap_finetuned_models(
         ax.set_title(config["title"])
         ax.axhline(0, color="black", linestyle=":", linewidth=0.8)
         ax.axhline(100, color="blue", linestyle=":", linewidth=0.8)
-        ax.set_yscale("symlog", linthresh=10, linscale=1.0)
+        ax.set_yscale("symlog", linthresh=1.0)
         ax.grid(True, which="both", ls="--")
 
     # Common legend
