@@ -57,7 +57,6 @@ class ParallelGpuExecutor:
         if self.ngpus == 0:
             raise RuntimeError("No CUDA GPUs detected.")
         print(f"Found {self.ngpus} GPUs.")
-        # Using 'spawn' is generally safer for CUDA with multiprocessing
         mp.set_start_method("spawn", force=True)
         self.manager = Manager()
         self.task_queue = self.manager.Queue()

@@ -371,3 +371,45 @@ def cache_tictactoe_data_random(
 
     data = move_tictactoe_data_to_device(data, device)
     return data
+
+
+def load_unprocessed_games(
+    data_folder: str,
+    index: int,
+) -> TicTacToeData:
+    filename = "tictactoe_data_200000_no_diagonal_first_two_moves_no_overlap.pkl"
+    data_folder_seed = os.path.join(data_folder, f"seed_{index}")
+    unprocessed_data_path = os.path.join(data_folder_seed, filename)
+
+    if not os.path.exists(unprocessed_data_path):
+        raise FileNotFoundError(
+            f"Unprocessed data file not found: {unprocessed_data_path}"
+        )
+
+    with open(unprocessed_data_path, "rb") as f:
+        # pickle.load loads to CPU by default
+        unprocessed_data = pickle.load(f)
+    assert isinstance(unprocessed_data, TicTacToeData), (
+        f"Tuple element loaded from {unprocessed_data_path} is not a TicTacToeData object"
+    )
+    return unprocessed_data
+
+
+def load_split_data(
+    data_folder: str, index: int
+) -> tuple[TicTacToeData, TicTacToeData, TicTacToeData, TicTacToeData]:
+    data_folder_seed = os.path.join(data_folder, f"seed_{index}")
+    all_splits_data_path = os.path.join(data_folder_seed, "tictactoe_all_splits.pkl")
+
+    if not os.path.exists(all_splits_data_path):
+        raise FileNotFoundError(f"Split data file not found: {all_splits_data_path}")
+
+    with open(all_splits_data_path, "rb") as f:
+        all_data_splits = pickle.load(f)
+    assert isinstance(all_data_splits, tuple) and len(all_data_splits) == 4, (
+        f"Data loaded from {all_splits_data_path} is not a tuple of four TicTacToeData objects"
+    )
+    assert isinstance(all_data_splits[0], TicTacToeData), (
+        f"Tuple element loaded from {all_splits_data_path} is not a TicTacToeData object"
+    )
+    return all_data_splits
