@@ -1,44 +1,60 @@
 #!/usr/bin/env python3
 
 # python3 wsg_games/tictactoe/train/main_parallel_pretrain_sweep.py
-import queue
+
 import torch as t
-import torch.multiprocessing as mp
-from multiprocessing import Manager
+import os
 
 from wsg_games.tictactoe.train.train import run_full_training
 from wsg_games.tictactoe.train.save_load_models import (
     save_model,
     load_model_get_matching_files,
 )
+from wsg_games.tictactoe.data import TicTacToeData, load_split_data
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.train.create_models import (
     get_training_cfg,
+    get_model_config,
 )
 from wsg_games.tictactoe.data import (
-    cache_tictactoe_data_random,
-    train_test_split_tictactoe_first_two_moves_no_overlap,
-    create_hard_label_tictactoe_data,
     move_tictactoe_data_to_device,
 )
-from wsg_games.tictactoe.train.create_models import get_model_config
+from wsg_games.parallel_computing.parallel_gpu_executor import (
+    ParallelGpuExecutor,
+    Job,
+)
 
 
-def worker(
-    gpu_id: int,
-    project_name,
-    experiment_folder,
-    tictactoe_train_data,
-    tictactoe_val_data,
-    tictactoe_test_data,
-    training_cfg,
-    task_queue,
-):
-    # Set GPU
-    t.cuda.set_device(gpu_id)
-    print(f"[Worker {gpu_id}] on {t.cuda.get_device_name(gpu_id)}")
-    device = str(t.device(f"cuda:{gpu_id}"))
+def run_tictactoe_training_task(
+    device: t.device,
+    data_folder: str,
+    goal: Goal,
+    model_size: str,
+    project_name: str,
+    experiment_folder: str,
+    training_cfg: dict,
+    index: int,
+) -> None:
+    """Function to be executed by worker process."""
+    # skip if already done
+    if load_model_get_matching_files(
+        project_name, model_size, goal, experiment_folder, index
+    ):
+        print(
+            f"[Task on GPU {str(device)}] already pretrained {goal} and {model_size}, skipping"
+        )
+        return
 
+    # Load data
+    print(f"[Task on GPU {str(device)}] loading data for {goal} and {model_size}")
+    tictactoe_train_data, _, tictactoe_val_data, tictactoe_test_data = load_split_data(
+        data_folder, index
+    )
+
+    # Move data to device
+    print(
+        f"[Task on GPU {str(device)}] preparing for {goal} and {model_size} on device {device}"
+    )
     tictactoe_train_data = move_tictactoe_data_to_device(
         tictactoe_train_data, device=device
     )
@@ -49,110 +65,76 @@ def worker(
         tictactoe_test_data, device=device
     )
 
-    # Run until queue empty
-    while True:
-        try:
-            goal, model_size = task_queue.get_nowait()
-        except queue.Empty:
-            print(f"[Worker {gpu_id}] no more tasks, exiting.")
-            break
-
-        print(f"[Worker {gpu_id}] starting task {goal} and {model_size}")
-        # skip if already done
-        if load_model_get_matching_files(
-            project_name, model_size, goal, experiment_folder
-        ):
-            print(
-                f"[Worker {gpu_id}] already pretrained {goal} and {model_size}, skipping"
-            )
-            continue
-
-        model_cfg = get_model_config(model_size)
-        model_cfg.device = device  # Important!
-        model, experiment_name, run_id = run_full_training(
-            project_name,
-            model_size,
-            goal,
-            tictactoe_train_data,
-            tictactoe_val_data,
-            tictactoe_test_data,
-            training_cfg,
-            model_cfg,
-        )
-
-        # save
-        save_model(model, run_id, project_name, experiment_name, experiment_folder)
-        print(f"[Worker {gpu_id}] finished {goal} and {model_size} (run {run_id})")
-        t.cuda.empty_cache()
-
-
-def main_pretrain():
-    project_name = "tictactoe_pretrain_forbidden_diagonal_rule_test2"
-    data_folder = "/homes/55/bwilop/wsg/data/"
-    experiment_folder = "/homes/55/bwilop/wsg/experiments/"
-
-    # Data
-    # has to be on CPU, otherwise worker starts working on GPU:0 by default.
-    tictactoe_data = cache_tictactoe_data_random(
-        data_folder + "tictactoe_data_random_STRONG_RULE_NO_DIAGONAL.pkl", device="cpu"
-    )  # None so data lives on CPU.
-    tictactoe_train_data, _, tictactoe_val_data, tictactoe_test_data = (
-        train_test_split_tictactoe_first_two_moves_no_overlap(
-            tictactoe_data, 42, 15, 5, 10, 1234
-        )
+    # Train
+    print(f"[Task on GPU {str(device)}] starting training for {goal} and {model_size}")
+    model_cfg = get_model_config(model_size)
+    model_cfg.device = device
+    model, experiment_name, run_id = run_full_training(
+        project_name,
+        model_size,
+        goal,
+        tictactoe_train_data,
+        tictactoe_val_data,
+        tictactoe_test_data,
+        training_cfg,
+        model_cfg,
     )
-    tictactoe_train_data = create_hard_label_tictactoe_data(
-        tictactoe_train_data, num_samples=1
+
+    # Save
+    save_model(model, run_id, project_name, experiment_name, experiment_folder, index)
+    print(
+        f"[Task on GPU {str(device)}] finished {goal} and {model_size} (run {run_id})"
     )
-    tictactoe_val_data = create_hard_label_tictactoe_data(
-        tictactoe_val_data, num_samples=1
-    )
-    tictactoe_test_data = create_hard_label_tictactoe_data(
-        tictactoe_test_data, num_samples=1
-    )
+
+
+def main_pretrain(
+    data_folder: str, experiment_folder: str, project_name: str, n_indices: int
+):
+    print("Starting multi-index pretraining...")
+    print(f"  data_folder: {data_folder}")
+    print(f"  project_name: {project_name}")
+    print(f"  experiment_folder: {experiment_folder}")
+    print(f"  n_indices: {n_indices}")
+
+    project_experiment_folder = os.path.join(experiment_folder, project_name)
+    os.makedirs(project_experiment_folder, exist_ok=True)
 
     training_cfg = get_training_cfg()
 
-    # Tasks
     model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
     goals = [Goal.WEAK_GOAL, Goal.STRONG_GOAL]
-    tasks = [(goal, model_size) for goal in goals for model_size in model_sizes]
-    print(f"Total tasks: {len(tasks)}")
 
-    # Start multiprocessing
-    ngpus = t.cuda.device_count()
-    if ngpus == 0:
-        raise RuntimeError("No CUDA GPUs detected.")
-
-    mp.set_start_method("spawn", force=True)
-    manager = Manager()
-    task_queue = manager.Queue()
-    for task in tasks:
-        task_queue.put(task)
-
-    processes = []
-    for gpu in range(ngpus):
-        p = mp.Process(
-            target=worker,
-            args=(
-                gpu,
-                project_name,
-                experiment_folder,
-                tictactoe_train_data,
-                tictactoe_val_data,
-                tictactoe_test_data,
-                training_cfg,
-                task_queue,
-            ),
+    all_jobs: list[Job] = []
+    for index in range(n_indices):
+        print(f"\n--- Preparing jobs for Index {index} ---")
+        jobs_for_index = 0
+        for goal in goals:
+            for model_size in model_sizes:
+                job_args = (
+                    data_folder,
+                    goal,
+                    model_size,
+                    project_name,
+                    experiment_folder,
+                    training_cfg,
+                    index,
+                )
+                all_jobs.append(
+                    Job(function=run_tictactoe_training_task, args=job_args)
+                )
+                jobs_for_index += 1
+        print(
+            f"  Prepared {jobs_for_index} jobs for Index {index}. Total jobs scheduled so far: {len(all_jobs)}"
         )
-        p.start()
-        processes.append(p)
 
-    for p in processes:
-        p.join()
-
-    print("All finetune tasks completed.")
+    parallel_gpu_executor = ParallelGpuExecutor()
+    parallel_gpu_executor.submit_jobs(all_jobs)
+    print("\nMulti-index pretraining script finished.")
 
 
 if __name__ == "__main__":
-    main_pretrain()
+    data_folder = "/homes/55/bwilop/wsg/data/tictactoe"
+    experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe"
+    project_name = "tictactoe_pretraining"
+    n_indices = 2
+    main_pretrain(data_folder, experiment_folder, project_name, n_indices)

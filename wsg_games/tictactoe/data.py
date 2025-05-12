@@ -412,4 +412,4 @@ def load_split_data(
     assert isinstance(all_data_splits[0], TicTacToeData), (
         f"Tuple element loaded from {all_splits_data_path} is not a TicTacToeData object"
     )
-    return all_data_splits
+    return all_data_splits  # tictactoe_train_data, tictactoe_weak_finetune_data, tictactoe_val_data, tictactoe_test_data
