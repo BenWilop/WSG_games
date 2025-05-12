@@ -101,8 +101,7 @@ def plot_loss_pretrain_models(
     # Evaluate models
     results = []
     for index in indices:
-        # _, _, _, tictactoe_test_data = load_split_data(data_folder, index)
-        tictactoe_test_data, _, _, _ = load_split_data(data_folder, index)
+        _, _, _, tictactoe_test_data = load_split_data(data_folder, index)
         tictactoe_test_data = move_tictactoe_data_to_device(
             tictactoe_test_data, device=device
         )

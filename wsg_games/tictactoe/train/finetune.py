@@ -5,6 +5,9 @@ from tqdm.notebook import tqdm
 from datetime import datetime
 import wandb
 from copy import deepcopy
+import matplotlib as plt
+import seaborn as sns
+import pandas as pd
 
 
 from wsg_games.tictactoe.train.train import (
@@ -12,13 +15,21 @@ from wsg_games.tictactoe.train.train import (
     log_generating_game_wandb,
     evaluate_model,
 )
-from wsg_games.tictactoe.data import random_sample_tictactoe_data, TicTacToeData
+from wsg_games.tictactoe.data import (
+    random_sample_tictactoe_data,
+    load_split_data,
+    move_tictactoe_data_to_device,
+    TicTacToeData,
+)
 from wsg_games.tictactoe.train.save_load_models import (
     save_model,
     load_model,
     load_finetuned_model_get_matching_files,
+    load_finetuned_model,
 )
 from wsg_games.tictactoe.game import Goal
+from wsg_games.tictactoe.train.pretrain import compute_avg_loss
+from wsg_games.tictactoe.train.create_models import count_parameters
 
 
 def quick_evaluation(name, model, test_data):
@@ -224,3 +235,161 @@ def finetune_strong_with_weak(
     run_id = wandb.run.id
     wandb.finish()
     return strong_model, experiment_name, run_id
+
+
+def plot_wsg_gap_finetuned_models(
+    data_folder: str,
+    experiment_folder: str,
+    pretrained_project_name: str,
+    finetuned_project_name: str,
+    device: t.device,
+    indices: int | list[int | None] | None,
+) -> None:
+    # Indices
+    if type(indices) == int:
+        indices = [indices]
+    elif indices is None:
+        max_idx = -1
+        for i in range(100):
+            if not load_finetuned_model(
+                finetuned_project_name, "nano", "micro", experiment_folder, device, i
+            ):
+                max_idx = i
+                break
+        indices = [i for i in range(max_idx)]
+
+    print("Indices: ", indices)
+
+    # Evaluate models (pretrained)
+    model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
+    index_size_to_avg_weak_loss: dict[tuple[int, str], float] = {}
+    index_size_to_n_parameters: dict[tuple[int, str], int] = {}
+    for index in indices:
+        _, _, _, tictactoe_test_data = load_split_data(data_folder, index)
+        tictactoe_test_data = move_tictactoe_data_to_device(
+            tictactoe_test_data, device=device
+        )
+        for model_size in model_sizes:
+            model = load_model(
+                pretrained_project_name,
+                model_size,
+                Goal.WEAK_GOAL,
+                experiment_folder,
+                device=device,
+                index=index,
+            )
+            if not model:
+                print(
+                    f"Model of model_size {model_size} and goal {Goal.WEAK_GOAL} not found, skipping."
+                )
+                return None
+            index_size_to_avg_weak_loss[(index, model_size)] = compute_avg_loss(
+                model,
+                tictactoe_test_data.games_data,
+                tictactoe_test_data.weak_goals_labels,
+            )
+            index_size_to_n_parameters[(index, model_size)] = count_parameters(model)
+
+            # Clean memory
+            model.cpu()
+            del model
+            t.cuda.empty_cache()
+
+    # Evaluate models (finetuned)
+    finetuning_pairs = [
+        (weak_size, model_sizes[j])
+        for i, weak_size in enumerate(model_sizes)
+        for j in range(i + 1, len(model_sizes))  # strong_size > weak_size index
+    ]
+    results = []
+    for index in indices:
+        for weak_size, strong_size in finetuning_pairs:
+            L_weak = index_size_to_avg_weak_loss[(index, weak_size)]
+            L_strong_ceiling = index_size_to_avg_weak_loss[(index, strong_size)]
+            if L_weak is None or L_strong_ceiling is None:
+                print(
+                    f"For weak_size {weak_size} and strong_size {strong_size} not all models exist, skipping."
+                )
+                continue
+            finetuned_model = load_finetuned_model(
+                finetuned_project_name,
+                weak_size,
+                strong_size,
+                experiment_folder,
+                device=device,
+                index=index,
+            )
+            if not finetuned_model:
+                print(
+                    f"Finetuned model of weak_size {weak_size} and strong_size {strong_size} not found, skipping."
+                )
+                continue
+            L_weak_to_strong = compute_avg_loss(
+                finetuned_model,
+                tictactoe_test_data.games_data,
+                tictactoe_test_data.weak_goals_labels,
+            )
+            recovered_finetuned = (
+                (L_weak_to_strong - L_weak) / (L_strong_ceiling - L_weak) * 100
+            )
+
+            n_parameters_weak = index_size_to_n_parameters[(index, weak_size)]
+            n_parameters_strong = index_size_to_n_parameters[(index, strong_size)]
+            results.append(
+                {
+                    "index": index
+                    if index is not None
+                    else -1,  # -1 as placeholder for None to make df easier
+                    "weak_size": weak_size,
+                    "strong_size": strong_size,
+                    "n_parameters_weak": n_parameters_weak,
+                    "n_parameters_strong": n_parameters_strong,
+                    "recovered_finetuned": recovered_finetuned,
+                }
+            )
+
+            # Clean memory
+            finetuned_model.cpu()
+            del finetuned_model
+            t.cuda.empty_cache()
+
+    if len(results) == 0:
+        print("No models found.")
+        return
+
+    # Plot
+    df = pd.DataFrame(results)
+
+    plt.figure(figsize=(10, 6))
+
+    sns.lineplot(
+        data=df,
+        x="n_parameters_strong",
+        y="recovered_finetuned",
+        hue="weak_size",
+        hue_order=model_sizes,
+        marker="o",
+        errorbar="sd",
+        legend="auto",
+    )
+
+    plt.xscale("log")
+    plt.xlabel("Strong Model Parameters (log scale)")
+    plt.ylabel("Recovered % (μ ± σ over indices)")
+    plt.title("WSG Gap Recovered by Finetuning vs. Strong Model Size")
+
+    plt.axhline(0, color="black", linestyle=":", linewidth=0.8)
+    plt.axhline(
+        100,
+        color="blue",
+        linestyle=":",
+        linewidth=0.8,
+        label="100% Recovery (Strong Ceiling)",
+    )
+
+    plt.yscale("symlog", linthresh=10, linscale=1.0)
+
+    plt.grid(True, which="both", ls="--")
+    plt.legend(title="Weak Model Size", bbox_to_anchor=(1.05, 1), loc="upper left")
+    plt.tight_layout(rect=[0, 0, 0.85, 1])  # Adjust rect for legend outside
+    plt.show()

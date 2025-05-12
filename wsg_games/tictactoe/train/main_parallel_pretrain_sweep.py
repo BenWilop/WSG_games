@@ -134,5 +134,5 @@ if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe"
     project_name = "tictactoe_pretraining"
-    n_indices = 2
+    n_indices = 10
     main_pretrain(data_folder, experiment_folder, project_name, n_indices)
