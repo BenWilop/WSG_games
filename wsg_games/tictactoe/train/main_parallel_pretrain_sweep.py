@@ -41,19 +41,19 @@ def run_tictactoe_training_task(
         project_name, model_size, goal, experiment_folder, index
     ):
         print(
-            f"[Task on GPU {str(device)}] already pretrained {goal} and {model_size}, skipping"
+            f"[Task on GPU {device}] already pretrained {goal} and {model_size}, skipping"
         )
         return
 
     # Load data
-    print(f"[Task on GPU {str(device)}] loading data for {goal} and {model_size}")
+    print(f"[Task on GPU {device}] loading data for {goal} and {model_size}")
     tictactoe_train_data, _, tictactoe_val_data, tictactoe_test_data = load_split_data(
         data_folder, index
     )
 
     # Move data to device
     print(
-        f"[Task on GPU {str(device)}] preparing for {goal} and {model_size} on device {device}"
+        f"[Task on GPU {device}] preparing for {goal} and {model_size} on device {device}"
     )
     tictactoe_train_data = move_tictactoe_data_to_device(
         tictactoe_train_data, device=device
@@ -66,7 +66,7 @@ def run_tictactoe_training_task(
     )
 
     # Train
-    print(f"[Task on GPU {str(device)}] starting training for {goal} and {model_size}")
+    print(f"[Task on GPU {device}] starting training for {goal} and {model_size}")
     model_cfg = get_model_config(model_size)
     model_cfg.device = device
     model, experiment_name, run_id = run_full_training(
@@ -82,15 +82,13 @@ def run_tictactoe_training_task(
 
     # Save
     save_model(model, run_id, project_name, experiment_name, experiment_folder, index)
-    print(
-        f"[Task on GPU {str(device)}] finished {goal} and {model_size} (run {run_id})"
-    )
+    print(f"[Task on GPU {device}] finished {goal} and {model_size} (run {run_id})")
 
 
 def main_pretrain(
     data_folder: str, experiment_folder: str, project_name: str, n_indices: int
 ):
-    print("Starting multi-index pretraining...")
+    print("Starting pretraining...")
     print(f"  data_folder: {data_folder}")
     print(f"  project_name: {project_name}")
     print(f"  experiment_folder: {experiment_folder}")
@@ -129,7 +127,7 @@ def main_pretrain(
 
     parallel_gpu_executor = ParallelGpuExecutor()
     parallel_gpu_executor.submit_jobs(all_jobs)
-    print("\nMulti-index pretraining script finished.")
+    print("\nPretraining script finished.")
 
 
 if __name__ == "__main__":
