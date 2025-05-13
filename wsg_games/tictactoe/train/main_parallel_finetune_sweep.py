@@ -180,8 +180,8 @@ if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe"
     pretrained_project_name = "tictactoe_pretraining"
-    finetuned_project_name = "tictactoe_finetuning"
-    n_indices = 2
+    finetuned_project_name = "tictactoe_finetuning_use_best_val_step"
+    n_indices = 10
     main_finetune_multi_index(
         data_folder,
         experiment_folder,
