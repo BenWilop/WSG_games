@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# python3 wsg_games/tictactoe/train/main_random_models.py
+# python3 wsg_games/tictactoe/train/main_create_random_models.py
 
 import torch as t
 import os
@@ -41,7 +41,7 @@ def main_pretrain_random(
                     print(
                         f"Random model index {index}, {goal} and {model_size} already exists, skipping"
                     )
-                    return
+                    continue
 
                 model_cfg = get_model_config(model_size)
                 model = HookedTransformer(model_cfg)

@@ -240,7 +240,8 @@ def finetune_strong_with_weak(
 def plot_wsg_gap_finetuned_models(
     data_folder: str,
     experiment_folder: str,
-    pretrained_project_name: str,
+    pretrained_project_name_weak: str,
+    pretrained_project_name_strong: str,
     finetuned_project_name: str,
     device: t.device,
     indices: int | list[int | None] | None,
@@ -272,7 +273,7 @@ def plot_wsg_gap_finetuned_models(
         )
         for model_size in model_sizes:
             model = load_model(
-                pretrained_project_name,
+                pretrained_project_name_weak,
                 model_size,
                 Goal.WEAK_GOAL,
                 experiment_folder,
@@ -304,6 +305,10 @@ def plot_wsg_gap_finetuned_models(
     ]
     results = []
     for index in indices:
+        _, _, _, tictactoe_test_data = load_split_data(data_folder, index)
+        tictactoe_test_data = move_tictactoe_data_to_device(
+            tictactoe_test_data, device=device
+        )
         for weak_size, strong_size in finetuning_pairs:
             L_weak = index_size_to_avg_weak_loss[(index, weak_size)]
             L_strong_ceiling = index_size_to_avg_weak_loss[(index, strong_size)]
@@ -315,7 +320,7 @@ def plot_wsg_gap_finetuned_models(
 
             # Strong model before finetuning
             strong_model_on_strong_rule = load_model(
-                pretrained_project_name,
+                pretrained_project_name_strong,
                 strong_size,
                 Goal.STRONG_GOAL,
                 experiment_folder,

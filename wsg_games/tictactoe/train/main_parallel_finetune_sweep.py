@@ -32,7 +32,8 @@ def run_tictactoe_finetuning_task(
     device: t.device,
     data_folder: str,
     experiment_folder: str,
-    pretrained_project_name: str,
+    pretrained_project_name_weak: str,
+    pretrained_project_name_strong: str,
     finetuned_project_name: str,
     weak_size: str,
     strong_size: str,
@@ -70,7 +71,7 @@ def run_tictactoe_finetuning_task(
 
     # load pretrained weak & strong
     weak_model = load_model(
-        pretrained_project_name,
+        pretrained_project_name_weak,
         weak_size,
         Goal.WEAK_GOAL,
         experiment_folder,
@@ -78,7 +79,7 @@ def run_tictactoe_finetuning_task(
         index,
     )
     strong_model = load_model(
-        pretrained_project_name,
+        pretrained_project_name_strong,
         strong_size,
         Goal.STRONG_GOAL,
         experiment_folder,
@@ -124,14 +125,16 @@ def run_tictactoe_finetuning_task(
 def main_finetune_multi_index(
     data_folder: str,
     experiment_folder: str,
-    pretrained_project_name: str,
+    pretrained_project_name_weak: str,
+    pretrained_project_name_strong: str,
     finetuned_project_name: str,
     n_indices: int,
 ):
     print("Starting finetuning...")
     print(f"  data_folder: {data_folder}")
     print(f"  experiment_folder: {experiment_folder}")
-    print(f"  pretrained_project_name: {pretrained_project_name}")
+    print(f"  pretrained_project_name_weak: {pretrained_project_name_weak}")
+    print(f"  pretrained_project_name_strong: {pretrained_project_name_strong}")
     print(f"  finetuned_project_name: {finetuned_project_name}")
     print(f"  n_indices: {n_indices}")
 
@@ -158,7 +161,8 @@ def main_finetune_multi_index(
             job_args = (
                 data_folder,
                 experiment_folder,
-                pretrained_project_name,
+                pretrained_project_name_weak,
+                pretrained_project_name_strong,
                 finetuned_project_name,
                 weak_size,
                 strong_size,
@@ -179,13 +183,15 @@ def main_finetune_multi_index(
 if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe"
-    pretrained_project_name = "tictactoe_pretraining"
+    pretrained_project_name_weak = "tictactoe_pretraining"
+    pretrained_project_name_strong = "tictactoe_pretraining"
     finetuned_project_name = "tictactoe_finetuning_use_best_val_step"
     n_indices = 10
     main_finetune_multi_index(
         data_folder,
         experiment_folder,
-        pretrained_project_name,
+        pretrained_project_name_weak,
+        pretrained_project_name_strong,
         finetuned_project_name,
         n_indices,
     )
