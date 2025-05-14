@@ -16,7 +16,7 @@ from wsg_games.tictactoe.train.save_load_models import (
 from transformer_lens.utilities.devices import move_to_and_update_config
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.train.create_models import (
-    get_training_cfg,
+    get_training_cfg_finetune,
 )
 from wsg_games.tictactoe.data import (
     move_tictactoe_data_to_device,
@@ -37,7 +37,7 @@ def run_tictactoe_finetuning_task(
     finetuned_project_name: str,
     weak_size: str,
     strong_size: str,
-    training_cfg: dict,
+    training_cfg_finetune: dict,
     index: int,
 ) -> None:
     """Function to be executed by worker process."""
@@ -106,7 +106,7 @@ def run_tictactoe_finetuning_task(
         tictactoe_weak_finetune_data,
         tictactoe_val_data,
         tictactoe_test_data,
-        training_cfg,
+        training_cfg_finetune,
     )
 
     # save
@@ -129,6 +129,7 @@ def main_finetune_multi_index(
     pretrained_project_name_strong: str,
     finetuned_project_name: str,
     n_indices: int,
+    training_cfg_finetune: dict,
 ):
     print("Starting finetuning...")
     print(f"  data_folder: {data_folder}")
@@ -142,9 +143,6 @@ def main_finetune_multi_index(
         experiment_folder, finetuned_project_name
     )
     os.makedirs(finetuned_project_experiment_folder, exist_ok=True)
-
-    training_cfg = get_training_cfg()
-    training_cfg["early_stopping_patience"] = 20
 
     model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
     finetuning_pairs = [
@@ -166,7 +164,7 @@ def main_finetune_multi_index(
                 finetuned_project_name,
                 weak_size,
                 strong_size,
-                training_cfg,
+                training_cfg_finetune,
                 index,
             )
             all_jobs.append(Job(function=run_tictactoe_finetuning_task, args=job_args))
@@ -184,8 +182,11 @@ if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe"
     pretrained_project_name_weak = "tictactoe_pretraining"
-    pretrained_project_name_strong = "tictactoe_pretraining_random"
-    finetuned_project_name = "tictactoe_finetuning_random"
+    pretrained_project_name_strong = "tictactoe_pretraining"
+    finetuned_project_name = "tictactoe_finetuning3"
+    finetuned_project_name = "tictactoe_finetuning_use_best_val_step3"
+    # training_cfg_finetune = get_training_cfg_finetune()
+    training_cfg_finetune["use_best_val_checkpoint"] = True
     n_indices = 10
     main_finetune_multi_index(
         data_folder,
@@ -194,4 +195,5 @@ if __name__ == "__main__":
         pretrained_project_name_strong,
         finetuned_project_name,
         n_indices,
+        training_cfg_finetune,
     )

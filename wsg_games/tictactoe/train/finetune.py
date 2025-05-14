@@ -16,7 +16,6 @@ from wsg_games.tictactoe.train.train import (
     evaluate_model,
 )
 from wsg_games.tictactoe.data import (
-    random_sample_tictactoe_data,
     load_split_data,
     move_tictactoe_data_to_device,
     TicTacToeData,
@@ -30,6 +29,7 @@ from wsg_games.tictactoe.train.save_load_models import (
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.train.pretrain import compute_avg_loss
 from wsg_games.tictactoe.train.create_models import count_parameters
+from wsg_games.tictactoe.data import TicTacToeData, random_sample_tictactoe_data
 
 
 def quick_evaluation(name, model, test_data):
@@ -88,16 +88,19 @@ def finetune_strong_with_weak(
     weak_train_data: TicTacToeData,
     val_data: TicTacToeData,
     test_data: TicTacToeData,
-    training_cfg: dict,
+    training_cfg_finetune: dict,
 ) -> tuple:
     """
     Early stopping by checkpointing after every optimizer step, then early stop with patience 1.
     """
-    lr = training_cfg.get("learning_rate")
-    weight_decay = training_cfg.get("weight_decay")
-    max_epochs = training_cfg.get("max_epochs")
-    batch_size = training_cfg.get("batch_size")
-    early_stopping_patience = 1
+    lr = training_cfg_finetune.get("learning_rate")
+    weight_decay = training_cfg_finetune.get("weight_decay")
+    early_stopping_patience_after_each_optimizer_step = training_cfg_finetune.get(
+        "early_stopping_patience_after_each_optimizer_step"
+    )
+    use_best_val_checkpoint = training_cfg_finetune.get("use_best_val_checkpoint")
+    max_epochs = training_cfg_finetune.get("max_epochs")
+    batch_size = training_cfg_finetune.get("batch_size")
 
     # Compute weak labels using weak_model predictions
     weak_model.eval()
@@ -134,7 +137,8 @@ def finetune_strong_with_weak(
             "n_val_data": n_val_data,
             "n_test_data": n_test_data,
             "max_epochs": max_epochs,
-            "early_stopping_patience": early_stopping_patience,
+            "early_stopping_patience_after_each_optimizer_step": early_stopping_patience_after_each_optimizer_step,
+            "use_best_val_checkpoint": use_best_val_checkpoint,
             "batch_size": batch_size,
         },
     )
@@ -151,9 +155,9 @@ def finetune_strong_with_weak(
         loss_fn,
     )
 
-    best_val_loss_epoch = float("inf")
-    best_val_loss_batch = float("inf")
-    best_epoch = 0
+    best_val_loss_optimizer_step = float("inf")
+    optimizer_step = 0
+    best_optimizer_step = 0
     patience_counter = 0
     best_model_state = None
     n_datapoints_since_last_evaluation = 0
@@ -207,27 +211,30 @@ def finetune_strong_with_weak(
                     rearrange(val_logits), rearrange(val_data.weak_goals_labels)
                 ).item()
 
-            wandb.log({"val/val_loss_batch": val_loss})
-            if False:  # THIS MEANS NO EARLY STOPPING SAVING!
-                # if val_loss < best_val_loss_batch:
-                best_val_loss_batch = val_loss
-                best_model_state = strong_model.state_dict()
+            # Early stopping after optimizer step
+            optimizer_step += 1
+            if val_loss < best_val_loss_optimizer_step:
+                best_val_loss_optimizer_step = val_loss
+                best_optimizer_step = optimizer_step
+                patience_counter = 0
+                if use_best_val_checkpoint:
+                    best_model_state = strong_model.state_dict()
+            else:
+                patience_counter += 1
 
-        # Early stopping after epochs
-        if val_loss < best_val_loss_epoch:
-            best_val_loss_epoch = val_loss
-            best_epoch = epoch
-            patience_counter = 0
-        else:
-            patience_counter += 1
-
-        wandb.log({"val/val_loss_epoch": val_loss, "val/best_epoch": best_epoch})
-
-        if patience_counter >= early_stopping_patience:
-            print(
-                f"Early stopping triggered at epoch {epoch}. Best epoch was {best_epoch} with val loss {best_val_loss_epoch:.4f}"
+            wandb.log(
+                {
+                    "val/val_loss_batch": val_loss,
+                    "val/val_loss_optimizer_step": val_loss,
+                    "val/best_optimizer_step": best_optimizer_step,
+                }
             )
-            break
+
+            if patience_counter >= early_stopping_patience_after_each_optimizer_step:
+                print(
+                    f"Early stopping triggered at step {optimizer_step}. Best epoch was {best_optimizer_step} with val loss {best_val_loss_optimizer_step:.4f}"
+                )
+                break
 
     if best_model_state is not None:
         strong_model.load_state_dict(best_model_state)

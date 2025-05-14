@@ -13,6 +13,18 @@ def get_training_cfg():
     return training_cfg
 
 
+def get_training_cfg_finetune():
+    training_cfg_finetune = {
+        "learning_rate": 1e-3,
+        "weight_decay": 1e-4,
+        "max_epochs": 1000,
+        "early_stopping_patience_after_each_optimizer_step": 100,
+        "use_best_val_checkpoint": True,
+        "batch_size": 64,
+    }
+    return training_cfg_finetune
+
+
 def get_model_sizes():
     model_sizes = {}
     model_sizes["nano"] = {

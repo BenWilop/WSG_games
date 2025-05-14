@@ -7,24 +7,6 @@ from transformer_lens import HookedTransformer
 
 from wsg_games.tictactoe.data import TicTacToeData, random_sample_tictactoe_data
 from wsg_games.tictactoe.game import Board, State
-from wsg_games.tictactoe.train.train import rearrange
-
-
-def quick_evaluation(name, model, test_data):
-    """Prints weak and strong test loss."""
-    model.eval()
-    with t.no_grad():
-        test_sample = random_sample_tictactoe_data(test_data, 20000)
-        test_logits = model(test_sample.games_data)
-        weak_loss = cross_entropy(
-            rearrange(test_logits), rearrange(test_sample.weak_goals_labels)
-        ).item()
-        strong_loss = cross_entropy(
-            rearrange(test_logits), rearrange(test_sample.strong_goals_labels)
-        ).item()
-        print(name)
-        print("weak_loss: ", weak_loss)
-        print("strong_loss: ", strong_loss)
 
 
 def evaluate_predictions(

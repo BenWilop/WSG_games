@@ -144,7 +144,7 @@ def train_model(
                 n_datapoints_since_last_generation_evaluation = 0
                 log_generating_game_wandb(model)
 
-        # Early stopping - check after each epoch
+        # Early stopping
         model.eval()
         with t.no_grad():
             match goal:
