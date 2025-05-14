@@ -113,7 +113,7 @@ def train_model(
         # Training Phase (mini-batch loop)
         # -------------------------
         model.train()
-        for games, random_labels, weak_labels, strong_labels in tqdm(
+        for games, _, weak_labels, strong_labels in tqdm(
             train_loader,
             desc="Training batches",
             leave=False,
@@ -144,7 +144,7 @@ def train_model(
                 n_datapoints_since_last_generation_evaluation = 0
                 log_generating_game_wandb(model)
 
-        # Early stopping
+        # Early stopping - check after each epoch
         model.eval()
         with t.no_grad():
             match goal:
