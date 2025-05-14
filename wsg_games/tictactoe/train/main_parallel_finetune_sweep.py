@@ -183,9 +183,9 @@ if __name__ == "__main__":
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe"
     pretrained_project_name_weak = "tictactoe_pretraining"
     pretrained_project_name_strong = "tictactoe_pretraining"
-    finetuned_project_name = "tictactoe_finetuning3"
-    finetuned_project_name = "tictactoe_finetuning_use_best_val_step3"
-    # training_cfg_finetune = get_training_cfg_finetune()
+    # finetuned_project_name = "tictactoe_finetuning4"
+    finetuned_project_name = "tictactoe_finetuning_use_best_val_step4"
+    training_cfg_finetune = get_training_cfg_finetune()
     training_cfg_finetune["use_best_val_checkpoint"] = True
     n_indices = 10
     main_finetune_multi_index(

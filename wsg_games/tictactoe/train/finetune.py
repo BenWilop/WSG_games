@@ -155,6 +155,7 @@ def finetune_strong_with_weak(
         loss_fn,
     )
 
+    early_stop_triggered = False
     best_val_loss_optimizer_step = float("inf")
     optimizer_step = 0
     best_optimizer_step = 0
@@ -165,6 +166,8 @@ def finetune_strong_with_weak(
     for epoch in tqdm(
         range(max_epochs), desc="Training epochs", position=0, dynamic_ncols=True
     ):
+        if early_stop_triggered:
+            break
         # -------------------------
         # Training Phase (mini-batch loop)
         # -------------------------
@@ -234,6 +237,7 @@ def finetune_strong_with_weak(
                 print(
                     f"Early stopping triggered at step {optimizer_step}. Best epoch was {best_optimizer_step} with val loss {best_val_loss_optimizer_step:.4f}"
                 )
+                early_stop_triggered = True
                 break
 
     if best_model_state is not None:
