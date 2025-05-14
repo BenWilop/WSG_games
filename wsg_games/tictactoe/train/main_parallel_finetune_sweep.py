@@ -200,12 +200,18 @@ def main_finetune_multi_index(
 if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe/"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe/"
+
     pretrained_project_name_weak = "tictactoe_pretraining"
-    pretrained_project_name_strong = "tictactoe_pretraining"
+    # pretrained_project_name_strong = "tictactoe_pretraining"
+    pretrained_project_name_strong = "tictactoe_pretraining_random"
+
     # finetuned_project_name = "tictactoe_finetuning4"
-    finetuned_project_name = "tictactoe_finetuning_use_best_val_step4"
+    # finetuned_project_name = "tictactoe_finetuning_use_best_val_step4"
+    finetuned_project_name = "tictactoe_finetuning_random4"
+    # finetuned_project_name = "tictactoe_finetuning_use_best_val_step_random4"
+
     training_cfg_finetune = get_training_cfg_finetune()
-    training_cfg_finetune["use_best_val_checkpoint"] = True
+    training_cfg_finetune["use_best_val_checkpoint"] = False
 
     n_indices = 10
     main_finetune_multi_index(
