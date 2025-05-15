@@ -6,6 +6,7 @@ from datetime import datetime
 import wandb
 from copy import deepcopy
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import seaborn as sns
 import pandas as pd
 
@@ -402,68 +403,173 @@ def plot_wsg_gap_finetuned_models(
 
     # Plot
     df = pd.DataFrame(results)
+    df.sort_values(by=["weak_size", "n_parameters_strong", "index"], inplace=True)
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6), sharey=True)  # Adjusted figsize
-    plot_configs = [
-        {"y_col": "wsg_gap_before_finetuning", "title": "WSG Gap Before Finetuning"},
-        {"y_col": "wsg_gap_after_finetuning", "title": "WSG Gap After Finetuning"},
+    n_weak_sizes = len(model_sizes)
+    num_cols_individual = 2
+    num_rows_individual = (
+        n_weak_sizes + num_cols_individual - 1
+    ) // num_cols_individual
+    total_gs_rows = 1 + num_rows_individual  # 1 for summary row at the top
+
+    # Figure size
+    fig_height = 5 + 3.5 * num_rows_individual
+    fig = plt.figure(figsize=(17, fig_height))
+    gs = gridspec.GridSpec(total_gs_rows, num_cols_individual, figure=fig)
+
+    # Color
+    palette_colors = sns.color_palette(n_colors=max(1, n_weak_sizes))
+    weak_size_to_color = {
+        size: color for size, color in zip(model_sizes, palette_colors)
+    }
+    legend_handles, legend_labels = None, None  # To store for figure-level legend
+
+    # --- 1. Top Row: Summary Plots ---
+    # Top Left: After Finetuning (Overall)
+    # Top Right: Before Finetuning (Overall)
+    ax_summary_before = fig.add_subplot(gs[0, 0])
+    ax_summary_after = fig.add_subplot(gs[0, 1], sharey=ax_summary_before)
+
+    summary_plot_configs = [
+        {
+            "ax": ax_summary_before,
+            "y_col": "wsg_gap_before_finetuning",
+            "title": "Overall - WSG Gap Before Finetuning",
+        },
+        {
+            "ax": ax_summary_after,
+            "y_col": "wsg_gap_after_finetuning",
+            "title": "Overall - WSG Gap After Finetuning",
+        },
     ]
-    for i, ax in enumerate(axes):
-        config = plot_configs[i]
-        if aggregate_data:  # mu +- std
+
+    for i, cfg in enumerate(summary_plot_configs):
+        ax = cfg["ax"]
+        if aggregate_data:
             sns.lineplot(
                 data=df,
                 x="n_parameters_strong",
-                y=config["y_col"],
+                y=cfg["y_col"],
                 hue="weak_size",
                 hue_order=model_sizes,
+                palette=weak_size_to_color,
                 marker="o",
                 errorbar="sd",
                 ax=ax,
-                legend=(i == 0),
             )
-        else:  # Plot individual lines for each index
+        else:
             sns.lineplot(
                 data=df,
                 x="n_parameters_strong",
-                y=config["y_col"],
+                y=cfg["y_col"],
                 hue="weak_size",
                 hue_order=model_sizes,
+                palette=weak_size_to_color,
                 marker="o",
                 units="index",
                 estimator=None,
                 linewidth=0.7,
                 alpha=0.7,
                 ax=ax,
-                legend=(i == 0),
             )
-
         ax.set_xscale("log")
         ax.set_xlabel("Strong Model Parameters (log scale)")
-        if i == 0:
-            ax.set_ylabel(
-                f"Recovered % ({'μ ± σ' if aggregate_data else 'individual indices'})"
-            )
-        ax.set_title(config["title"])
+        ax.set_ylabel(
+            f"Recovered % ({'μ ± σ' if aggregate_data else 'Individual Indices'})"
+        )
+        ax.set_title(cfg["title"])
         ax.axhline(0, color="black", linestyle=":", linewidth=0.8)
         ax.axhline(100, color="blue", linestyle=":", linewidth=0.8)
         ax.set_yscale("symlog", linthresh=1.0)
-        # ax.set_yscale("symlog", linthresh=100.0, linscale=4)
         ax.grid(True, which="both", ls="--")
 
-    # Common legend
-    if axes[0].get_legend() is not None:
-        handles, labels = axes[0].get_legend_handles_labels()
-        axes[0].get_legend().remove()
+        if ax.get_legend() is not None:
+            if i == 0:
+                legend_handles, legend_labels = ax.get_legend_handles_labels()
+            ax.get_legend().remove()
+
+    # --- 2. Subsequent Rows: Individual "After Finetuning" Plots ---
+    if num_rows_individual > 0:
+        for idx_weak, current_weak_size in enumerate(model_sizes):
+            gs_row = 1 + idx_weak // num_cols_individual  # Start from GridSpec row 1
+            gs_col = idx_weak % num_cols_individual
+
+            ax_individual = fig.add_subplot(
+                gs[gs_row, gs_col], sharex=ax_summary_before, sharey=ax_summary_before
+            )
+            df_filtered = df[df["weak_size"] == current_weak_size].copy()
+            plot_color = weak_size_to_color.get(current_weak_size)
+
+            ax_individual.set_title(f"{current_weak_size} - After Finetuning")
+            if (
+                df_filtered.empty
+                or df_filtered["wsg_gap_after_finetuning"].isnull().all()
+            ):
+                ax_individual.text(
+                    0.5,
+                    0.5,
+                    "No data",
+                    ha="center",
+                    va="center",
+                    transform=ax_individual.transAxes,
+                )
+            else:
+                if aggregate_data:
+                    sns.lineplot(
+                        data=df_filtered,
+                        x="n_parameters_strong",
+                        y="wsg_gap_after_finetuning",
+                        marker="o",
+                        errorbar="sd",
+                        color=plot_color,
+                        ax=ax_individual,
+                        legend=False,
+                    )
+                else:
+                    sns.lineplot(
+                        data=df_filtered,
+                        x="n_parameters_strong",
+                        y="wsg_gap_after_finetuning",
+                        marker="o",
+                        units="index",
+                        estimator=None,  # linewidth=0.7, alpha=0.7,
+                        color=plot_color,
+                        ax=ax_individual,
+                        legend=False,
+                    )
+
+            ax_individual.set_xscale("log")
+            ax_individual.set_yscale("symlog", linthresh=1.0)
+            ax_individual.axhline(0, color="black", linestyle=":", linewidth=0.8)
+            ax_individual.axhline(100, color="blue", linestyle=":", linewidth=0.8)
+            ax_individual.grid(True, which="both", ls="--")
+
+            ax_individual.set_xlabel("Strong Model Parameters (log scale)")
+            ax_individual.set_ylabel(
+                "Recovered %"
+            )  # Simpler Y label for individual plots
+
+    # --- 3. Overall Figure Legend and Layout ---
+    fig.suptitle(
+        "WSG Gap Analysis: Overall Summary and Per-Weak-Model Detail (After Finetuning)",
+        fontsize=18,
+    )
+    if legend_handles and legend_labels:
         fig.legend(
-            handles,
-            labels,
-            title="Weak Model Size",
-            bbox_to_anchor=(0.5, -0.02),
-            loc="upper center",
-            ncol=len(model_sizes) // 2 or 1,
+            legend_handles,
+            legend_labels,
+            title="Weak Model Size (Overall Plots)",
+            loc="upper center",  # Anchors the legend by its upper center point
+            bbox_to_anchor=(0.5, 0.94),  # Positions the legend's anchor point:
+            # 0.5 means horizontally centered in the figure.
+            # 0.94 means 94% of the way up the figure (below the suptitle).
+            # You might need to fine-tune this y-value (e.g., 0.93-0.95).
+            ncol=max(
+                1, (n_weak_sizes + 1) // 2
+            ),  # Adjusted ncol for potentially better fit
         )
 
-    fig.suptitle("WSG Gap Recovered vs. Strong Model Size", fontsize=16, y=1.02)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])  # Adjust rect for suptitle and fig legend
+    bottom_margin = 0.1 if legend_handles else 0.03
+    fig.tight_layout(rect=[0, bottom_margin, 1, 0.96])
+
     plt.show()
