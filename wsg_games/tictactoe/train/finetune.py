@@ -408,8 +408,14 @@ def plot_wsg_gap_finetuned_models(
     n_weak_sizes = len(model_sizes)
     num_cols_individual = 2
     num_rows_individual = (
-        n_weak_sizes + num_cols_individual - 1
-    ) // num_cols_individual
+        (
+            n_weak_sizes
+            + num_cols_individual
+            - 1
+            - 1  # num_cols_individual - 1 to round up and second -1 because last plot is empty
+        )
+        // num_cols_individual
+    )
     total_gs_rows = 1 + num_rows_individual  # 1 for summary row at the top
 
     # Figure size
@@ -468,8 +474,8 @@ def plot_wsg_gap_finetuned_models(
                 marker="o",
                 units="index",
                 estimator=None,
-                linewidth=0.7,
-                alpha=0.7,
+                # linewidth=0.7,
+                # alpha=0.7,
                 ax=ax,
             )
         ax.set_xscale("log")
@@ -490,7 +496,7 @@ def plot_wsg_gap_finetuned_models(
 
     # --- 2. Subsequent Rows: Individual "After Finetuning" Plots ---
     if num_rows_individual > 0:
-        for idx_weak, current_weak_size in enumerate(model_sizes):
+        for idx_weak, current_weak_size in enumerate(model_sizes[:-1]):
             gs_row = 1 + idx_weak // num_cols_individual  # Start from GridSpec row 1
             gs_col = idx_weak % num_cols_individual
 
@@ -548,6 +554,14 @@ def plot_wsg_gap_finetuned_models(
             ax_individual.set_ylabel(
                 "Recovered %"
             )  # Simpler Y label for individual plots
+
+        # Hide any unused subplots in the individual plots grid
+        for i in range(n_weak_sizes, num_rows_individual * num_cols_individual):
+            gs_row_to_hide = 1 + i // num_cols_individual
+            gs_col_to_hide = i % num_cols_individual
+            if gs_row_to_hide < total_gs_rows and gs_col_to_hide < num_cols_individual:
+                ax_to_hide = fig.add_subplot(gs[gs_row_to_hide, gs_col_to_hide])
+                ax_to_hide.set_visible(False)
 
     # --- 3. Overall Figure Legend and Layout ---
     fig.suptitle(
