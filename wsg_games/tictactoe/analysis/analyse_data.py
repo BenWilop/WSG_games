@@ -7,17 +7,18 @@ from collections import Counter
 
 from wsg_games.tictactoe.evals import evaluate_predictions
 from wsg_games.tictactoe.data import TicTacToeData
+from wsg_games.tictactoe.train.train import rearrange
 
 
 def entropy(labels: t.Tensor) -> float:
     """Minimal achievable CE loss"""
-    print(labels.shape)
+    labels = rearrange(labels)
     assert t.all(labels >= 0.0), "All elements in labels must be non-negative"
     assert t.allclose(
-        labels.sum(dim=2),
-        t.ones((labels.size(0), labels.size(1)), device=labels.device),
+        labels.sum(dim=1),
+        t.ones(labels.size(0), device=labels.device),
         atol=1e-6,
-    ), "Each row (dimension 2) of `labels` must sum to 1.0"
+    ), "Each row (dimension 1) of `labels` must sum to 1.0"
     distribution = dist.Categorical(probs=labels)
     ent = distribution.entropy()
     return ent.mean().item()

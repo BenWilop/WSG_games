@@ -56,22 +56,11 @@ def run_tictactoe_finetuning_task(
     # Load data
     print(f"[Task {task_id} on GPU {device}] loading data.")
     _, tictactoe_weak_finetune_data, tictactoe_val_data, tictactoe_test_data = (
-        load_split_data(data_folder, index)
-    )
-
-    # Move data to device
-    print(f"[Task {task_id} on GPU {device}] preparing.")
-    tictactoe_weak_finetune_data = move_tictactoe_data_to_device(
-        tictactoe_weak_finetune_data, device=device
-    )
-    tictactoe_val_data = move_tictactoe_data_to_device(
-        tictactoe_val_data, device=device
-    )
-    tictactoe_test_data = move_tictactoe_data_to_device(
-        tictactoe_test_data, device=device
+        load_split_data(data_folder, device, index)
     )
 
     # load pretrained weak & strong
+    print(f"[Task {task_id} on GPU {device}] preparing.")
     weak_model = load_model(
         pretrained_project_name_weak,
         weak_size,

@@ -22,7 +22,6 @@ def evaluate_predictions(
     - Example: legal_moves = [1, 0, 1], predictions = [0.1, 0.3, 0.6] -> illegal_move_chance = 0.7
     """
     res = {}
-
     # Accuracy = percentage weight of models predictions on correct moves
     positive_weak_labels_mask = (
         tictactoe_data.weak_goals_labels > 0

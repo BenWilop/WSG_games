@@ -80,8 +80,8 @@ def plot_loss_pretrain_models(
     device: t.device,
     indices: int | list[int | None] | None,
 ) -> None:
-    minimal_loss_weak = 0.65
-    minimal_loss_strong = 0.61
+    minimal_loss_weak = 0.34
+    minimal_loss_strong = 0.32
 
     # Indices
     if type(indices) == int:

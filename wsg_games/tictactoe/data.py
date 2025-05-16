@@ -396,14 +396,13 @@ def load_unprocessed_games(
 
 
 def load_split_data(
-    data_folder: str, index: int
+    data_folder: str, device: t.device, index: int
 ) -> tuple[TicTacToeData, TicTacToeData, TicTacToeData, TicTacToeData]:
+    # Load data
     data_folder_seed = os.path.join(data_folder, f"seed_{index}")
     all_splits_data_path = os.path.join(data_folder_seed, "tictactoe_all_splits.pkl")
-
     if not os.path.exists(all_splits_data_path):
         raise FileNotFoundError(f"Split data file not found: {all_splits_data_path}")
-
     with open(all_splits_data_path, "rb") as f:
         all_data_splits = pickle.load(f)
     assert isinstance(all_data_splits, tuple) and len(all_data_splits) == 4, (
@@ -412,4 +411,30 @@ def load_split_data(
     assert isinstance(all_data_splits[0], TicTacToeData), (
         f"Tuple element loaded from {all_splits_data_path} is not a TicTacToeData object"
     )
-    return all_data_splits  # tictactoe_train_data, tictactoe_weak_finetune_data, tictactoe_val_data, tictactoe_test_data
+
+    # Move data to device
+    (
+        tictactoe_train_data,
+        tictactoe_weak_finetune_data,
+        tictactoe_val_data,
+        tictactoe_test_data,
+    ) = all_data_splits
+    tictactoe_train_data = move_tictactoe_data_to_device(
+        tictactoe_train_data, device=device
+    )
+    tictactoe_weak_finetune_data = move_tictactoe_data_to_device(
+        tictactoe_weak_finetune_data, device=device
+    )
+    tictactoe_val_data = move_tictactoe_data_to_device(
+        tictactoe_val_data, device=device
+    )
+    tictactoe_test_data = move_tictactoe_data_to_device(
+        tictactoe_test_data, device=device
+    )
+
+    return (
+        tictactoe_train_data,
+        tictactoe_weak_finetune_data,
+        tictactoe_val_data,
+        tictactoe_test_data,
+    )

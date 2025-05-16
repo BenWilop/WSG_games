@@ -48,6 +48,7 @@ def quick_evaluation(name, model, test_data):
         print(name)
         print("weak_loss: ", weak_loss)
         print("strong_loss: ", strong_loss)
+    return weak_loss, strong_loss
 
 
 def evaluate_model_finetuning(
@@ -486,7 +487,8 @@ def plot_wsg_gap_finetuned_models(
         ax.set_title(cfg["title"])
         ax.axhline(0, color="black", linestyle=":", linewidth=0.8)
         ax.axhline(100, color="blue", linestyle=":", linewidth=0.8)
-        ax.set_yscale("symlog", linthresh=1.0)
+        # ax.set_yscale("symlog", linthresh=1.0)
+        ax.set_ylim(0, 25)  #
         ax.grid(True, which="both", ls="--")
 
         if ax.get_legend() is not None:
@@ -545,7 +547,8 @@ def plot_wsg_gap_finetuned_models(
                     )
 
             ax_individual.set_xscale("log")
-            ax_individual.set_yscale("symlog", linthresh=1.0)
+            # ax_individual.set_yscale("symlog", linthresh=1.0)
+            ax.set_ylim(0, 50)  #
             ax_individual.axhline(0, color="black", linestyle=":", linewidth=0.8)
             ax_individual.axhline(100, color="blue", linestyle=":", linewidth=0.8)
             ax_individual.grid(True, which="both", ls="--")

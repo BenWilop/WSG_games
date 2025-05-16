@@ -48,21 +48,7 @@ def run_tictactoe_training_task(
     # Load data
     print(f"[Task on GPU {device}] loading data for {goal} and {model_size}")
     tictactoe_train_data, _, tictactoe_val_data, tictactoe_test_data = load_split_data(
-        data_folder, index
-    )
-
-    # Move data to device
-    print(
-        f"[Task on GPU {device}] preparing for {goal} and {model_size} on device {device}"
-    )
-    tictactoe_train_data = move_tictactoe_data_to_device(
-        tictactoe_train_data, device=device
-    )
-    tictactoe_val_data = move_tictactoe_data_to_device(
-        tictactoe_val_data, device=device
-    )
-    tictactoe_test_data = move_tictactoe_data_to_device(
-        tictactoe_test_data, device=device
+        data_folder, device, index
     )
 
     # Train
