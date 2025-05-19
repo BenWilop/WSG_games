@@ -22,7 +22,7 @@ def rearrange(tensor: t.Tensor) -> t.Tensor:
     This converts a tensor of shape [n_games, game_length, n_tokens]
     into [n_games * game_length, n_tokens] which is what a loss_fn such as F.cross_entropy expects.
     """
-    return einops.rearrange(tensor[:, 3:, :], "batch seq token -> (batch seq) token")
+    return einops.rearrange(tensor[:, 2:, :], "batch seq token -> (batch seq) token")
 
 
 def log_epoch_wandb(

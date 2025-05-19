@@ -38,7 +38,10 @@ def load_model_get_matching_files(
     experiment_folder: str,
     index: int | None,
 ) -> list[str]:
-    project_dir = f"{experiment_folder}/{project_name}"
+    project_dir = f"{experiment_folder}{project_name}"
+    print("experiment_folder: ", experiment_folder)
+    print("project_name: ", project_name)
+    print(project_dir)
     if index is not None:
         experiment_prefix = f"experiment_{index}_{model_size}_{str(goal)}_"
     else:

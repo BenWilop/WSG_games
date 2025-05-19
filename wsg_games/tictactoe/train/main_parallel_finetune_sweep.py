@@ -9,7 +9,10 @@ from multiprocessing import Manager
 import json
 import copy
 
-from wsg_games.tictactoe.train.finetune import finetune_strong_with_weak
+from wsg_games.tictactoe.train.finetune import (
+    finetune_strong_with_weak,
+    plot_wsg_gap_finetuned_models,
+)
 from wsg_games.tictactoe.train.save_load_models import (
     load_model,
     save_model,
@@ -184,26 +187,27 @@ def main_finetune_multi_index(
     parallel_gpu_executor = ParallelGpuExecutor()
     parallel_gpu_executor.submit_jobs(all_jobs)
     print("\nPretraining script finished.")
+    return finetuned_project_experiment_folder
 
 
 if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe/"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe/"
 
-    pretrained_project_name_weak = "tictactoe_pretraining"
-    # pretrained_project_name_strong = "tictactoe_pretraining"
-    pretrained_project_name_strong = "tictactoe_pretraining_random"
+    pretrained_project_name_weak = "tictactoe_pretraining5"
+    pretrained_project_name_strong = "tictactoe_pretraining5"
+    # pretrained_project_name_strong = "tictactoe_pretraining_random"
 
-    # finetuned_project_name = "tictactoe_finetuning4"
-    # finetuned_project_name = "tictactoe_finetuning_use_best_val_step4"
-    finetuned_project_name = "tictactoe_finetuning_random4"
-    # finetuned_project_name = "tictactoe_finetuning_use_best_val_step_random4"
+    finetuned_project_name = "tictactoe_finetuning5"
+    # finetuned_project_name = "tictactoe_finetuning_use_best_val_step5"
+    # finetuned_project_name = "tictactoe_finetuning_random5"
+    # finetuned_project_name = "tictactoe_finetuning_use_best_val_step_random5"
 
     training_cfg_finetune = get_training_cfg_finetune()
-    training_cfg_finetune["use_best_val_checkpoint"] = False
+    training_cfg_finetune["use_best_val_checkpoint"] = True
 
     n_indices = 10
-    main_finetune_multi_index(
+    finetuned_project_experiment_folder = main_finetune_multi_index(
         data_folder,
         experiment_folder,
         pretrained_project_name_weak,
@@ -211,4 +215,16 @@ if __name__ == "__main__":
         finetuned_project_name,
         n_indices,
         training_cfg_finetune,
+    )
+
+    plot_wsg_gap_finetuned_models(
+        data_folder,
+        experiment_folder,
+        pretrained_project_name_weak,
+        pretrained_project_name_strong,
+        finetuned_project_name,
+        device=t.device("cpu"),
+        indices=[0],
+        aggregate_data=False,
+        save_path=finetuned_project_experiment_folder,
     )

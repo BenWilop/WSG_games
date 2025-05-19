@@ -23,6 +23,7 @@ from wsg_games.parallel_computing.parallel_gpu_executor import (
     ParallelGpuExecutor,
     Job,
 )
+from wsg_games.tictactoe.train.pretrain import plot_loss_pretrain_models
 
 
 def run_tictactoe_training_task(
@@ -114,11 +115,21 @@ def main_pretrain(
     parallel_gpu_executor = ParallelGpuExecutor()
     parallel_gpu_executor.submit_jobs(all_jobs)
     print("\nPretraining script finished.")
+    return project_experiment_folder
 
 
 if __name__ == "__main__":
-    data_folder = "/homes/55/bwilop/wsg/data/tictactoe"
-    experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe"
-    project_name = "tictactoe_pretraining"
+    data_folder = "/homes/55/bwilop/wsg/data/tictactoe/"
+    experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe/"
+    # project_name = "tictactoe_pretraining"
+    project_name = "tictactoe_pretraining5"
     n_indices = 10
-    main_pretrain(data_folder, experiment_folder, project_name, n_indices)
+    save_path = main_pretrain(data_folder, experiment_folder, project_name, n_indices)
+    plot_loss_pretrain_models(
+        data_folder,
+        experiment_folder,
+        project_name,
+        device=t.device("cpu"),
+        indices=None,
+        save_path=save_path,
+    )

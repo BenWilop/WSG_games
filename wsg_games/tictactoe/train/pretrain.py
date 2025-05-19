@@ -4,6 +4,7 @@ from torch.nn.functional import cross_entropy
 from einops import rearrange
 import pandas as pd
 import seaborn as sns
+import os
 
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.data import (
@@ -79,6 +80,7 @@ def plot_loss_pretrain_models(
     project_name: str,
     device: t.device,
     indices: int | list[int | None] | None,
+    save_path: str | None = None,
 ) -> None:
     minimal_loss_weak = 0.34
     minimal_loss_strong = 0.32
@@ -101,7 +103,9 @@ def plot_loss_pretrain_models(
     # Evaluate models
     results = []
     for index in indices:
-        _, _, _, tictactoe_test_data = load_split_data(data_folder, index)
+        _, _, _, tictactoe_test_data = load_split_data(
+            data_folder, device=device, index=index
+        )
         tictactoe_test_data = move_tictactoe_data_to_device(
             tictactoe_test_data, device=device
         )
@@ -269,4 +273,16 @@ def plot_loss_pretrain_models(
     ax.grid(True, which="both", ls="--")
 
     plt.tight_layout()
+
+    if save_path:
+        save_dir = os.path.dirname(save_path)
+        if save_dir and not os.path.exists(save_dir):
+            os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, "pretrain.png")
+        try:
+            plt.savefig(save_path, bbox_inches="tight", dpi=300)
+            print(f"Plot saved to {save_path}")
+        except Exception as e:
+            print(f"Error saving plot to {save_path}: {e}")
+
     plt.show()
