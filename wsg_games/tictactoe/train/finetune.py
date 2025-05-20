@@ -339,8 +339,10 @@ def plot_wsg_plot(
         ax.set_title(cfg["title"])
         ax.axhline(0, color="black", linestyle=":", linewidth=0.8)
         ax.axhline(100, color="blue", linestyle=":", linewidth=0.8)
-        # ax.set_yscale("symlog", linthresh=1.0)
-        ax.set_ylim(0, 25)  #
+        if y_axis_log:
+            ax.set_yscale("symlog", linthresh=1.0)
+        else:
+            ax.set_ylim(0, 100)
         ax.grid(True, which="both", ls="--")
 
         if ax.get_legend() is not None:
@@ -399,8 +401,10 @@ def plot_wsg_plot(
                     )
 
             ax_individual.set_xscale("log")
-            # ax_individual.set_yscale("symlog", linthresh=1.0)
-            ax.set_ylim(0, 50)  #
+            if y_axis_log:
+                ax_individual.set_yscale("symlog", linthresh=1.0)
+            else:
+                ax_individual.set_ylim(0, 100)
             ax_individual.axhline(0, color="black", linestyle=":", linewidth=0.8)
             ax_individual.axhline(100, color="blue", linestyle=":", linewidth=0.8)
             ax_individual.grid(True, which="both", ls="--")
@@ -442,13 +446,12 @@ def plot_wsg_plot(
     fig.tight_layout(rect=[0, bottom_margin, 1, 0.96])
 
     if save_path:
-        save_dir = os.path.dirname(save_path)
-        if save_dir and not os.path.exists(save_dir):
-            os.makedirs(save_dir, exist_ok=True)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path, exist_ok=True)
         if y_axis_log:
-            save_path = os.path.join(save_dir, "finetune_log_scale.png")
+            save_path = os.path.join(save_path, "finetune_log_scale.png")
         else:
-            save_path = os.path.join(save_dir, "finetune_linear_scale.png")
+            save_path = os.path.join(save_path, "finetune_linear_scale.png")
         try:
             plt.savefig(save_path, bbox_inches="tight", dpi=300)
             print(f"Plot saved to {save_path}")

@@ -195,26 +195,29 @@ if __name__ == "__main__":
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe/"
 
     pretrained_project_name_weak = "tictactoe_pretraining5"
-    pretrained_project_name_strong = "tictactoe_pretraining5"
-    # pretrained_project_name_strong = "tictactoe_pretraining_random"
+    # pretrained_project_name_strong = "tictactoe_pretraining5"
+    pretrained_project_name_strong = "tictactoe_pretraining_random"
 
-    finetuned_project_name = "tictactoe_finetuning5"
+    # finetuned_project_name = "tictactoe_finetuning5"
     # finetuned_project_name = "tictactoe_finetuning_use_best_val_step5"
     # finetuned_project_name = "tictactoe_finetuning_random5"
-    # finetuned_project_name = "tictactoe_finetuning_use_best_val_step_random5"
+    finetuned_project_name = "tictactoe_finetuning_use_best_val_step_random5"
 
     training_cfg_finetune = get_training_cfg_finetune()
     training_cfg_finetune["use_best_val_checkpoint"] = True
 
     n_indices = 10
-    finetuned_project_experiment_folder = main_finetune_multi_index(
-        data_folder,
-        experiment_folder,
-        pretrained_project_name_weak,
-        pretrained_project_name_strong,
-        finetuned_project_name,
-        n_indices,
-        training_cfg_finetune,
+    # finetuned_project_experiment_folder = main_finetune_multi_index(
+    #     data_folder,
+    #     experiment_folder,
+    #     pretrained_project_name_weak,
+    #     pretrained_project_name_strong,
+    #     finetuned_project_name,
+    #     n_indices,
+    #     training_cfg_finetune,
+    # )
+    finetuned_project_experiment_folder = os.path.join(
+        experiment_folder, finetuned_project_name
     )
 
     plot_wsg_gap_finetuned_models(
@@ -224,7 +227,7 @@ if __name__ == "__main__":
         pretrained_project_name_strong,
         finetuned_project_name,
         device=t.device("cpu"),
-        indices=[0],
+        indices=None,
         aggregate_data=False,
         save_path=finetuned_project_experiment_folder,
     )
