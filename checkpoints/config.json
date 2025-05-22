@@ -8,4 +8,14 @@
         "l1_penalty": 0.1,
         "warmup_steps": 1000,
         "resample_steps": null,
-        "device": 
+        "device": "cuda",
+        "layer": 3,
+        "lm_name": "experiment_2_strong_model_finetuned_model_2025-05-23-00-37",
+        "wandb_name": "experiment_2_strong_model_finetuned_model_2025-05-23-00-37L3-mu1.0e-01-lr1e-03",
+        "submodule_name": null,
+        "use_mse_loss": false,
+        "code_normalization": "CROSSCODER",
+        "code_normalization_alpha_sae": 1.0,
+        "code_normalization_alpha_cc": 0.1
+    }
+}
