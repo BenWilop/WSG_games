@@ -36,3 +36,6 @@ wandb/
 
 # Packages
 dictionary_learning/
+
+# Model states that get saved in dictionary_learning
+checkpoints/
