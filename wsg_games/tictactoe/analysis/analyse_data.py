@@ -50,7 +50,7 @@ def print_data_statistics(tictactoe_data: TicTacToeData) -> None:
     print("--------------------------------------------------------")
 
 
-def get_all_prefixes(games_data: t.Tensor) -> set[tuple[int]]:
+def get_all_prefixes(games_data: t.Tensor, ordered_moves: bool) -> set[tuple[int]]:
     """
     Goes through all games [t1, t2, t3, ...] and collects all prefixes
     (t1, t2), (t1, t2, t3), ... in a set."""
@@ -60,18 +60,21 @@ def get_all_prefixes(games_data: t.Tensor) -> set[tuple[int]]:
     for i in range(n_games):
         game = games_data[i]
         for l in range(1, game_length + 1):
-            prefix = tuple(game[:l].tolist())
+            if ordered_moves:
+                prefix = tuple(game[:l].tolist())
+            else:
+                prefix = tuple(sorted(game[:l].tolist()))
             prefixes.add(prefix)
     return prefixes
 
 
 def calculate_leakage_percentage(
-    train_data: TicTacToeData, test_data: TicTacToeData
+    train_data: TicTacToeData, test_data: TicTacToeData, ordered_moves: bool = True
 ) -> float:
     """
     Computes the percentage of test prefixes (game states) that also appear in the train data.
     """
-    train_prefixes = get_all_prefixes(train_data.games_data)
+    train_prefixes = get_all_prefixes(train_data.games_data, ordered_moves)
 
     leaked = 0
     total = 0
@@ -81,7 +84,10 @@ def calculate_leakage_percentage(
         game = test_games[i]
         for l in range(3, game_length + 1):
             total += 1
-            prefix = tuple(game[:l].tolist())
+            if ordered_moves:
+                prefix = tuple(game[:l].tolist())
+            else:
+                prefix = tuple(sorted(game[:l].tolist()))
             if prefix in train_prefixes:
                 leaked += 1
     leakage_pct = (leaked / total) * 100
