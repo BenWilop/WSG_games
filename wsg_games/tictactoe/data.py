@@ -338,7 +338,10 @@ def move_tictactoe_data_to_device(
 
 
 def cache_tictactoe_data(path: str, device: t.device) -> TicTacToeData:
-    """calculate_tictactoe_data and save or load cache"""
+    """
+    Calculate_tictactoe_data and save or load cache
+    Uses complete game tree.
+    """
     if os.path.exists(path):
         with open(path, "rb") as f:
             data = pickle.load(f)
@@ -357,7 +360,10 @@ def cache_tictactoe_data(path: str, device: t.device) -> TicTacToeData:
 def cache_tictactoe_data_random(
     path: str, device: t.device, seed: int | None = None
 ) -> TicTacToeData:
-    """calculate_tictactoe_data_random and save or load cache"""
+    """
+    Calculate_tictactoe_data_random and save or load cache
+    Choosing random games.
+    """
     if os.path.exists(path):
         with open(path, "rb") as f:
             data = pickle.load(f)
@@ -365,7 +371,7 @@ def cache_tictactoe_data_random(
             f"Data loaded from {path} is not a TicTacToeData object"
         )
     else:
-        data = calculate_tictactoe_data_random(200000, seed=seed)
+        data = calculate_tictactoe_data_random(1000000, seed=seed)
         with open(path, "wb") as f:
             pickle.dump(data, f)
 
@@ -373,26 +379,27 @@ def cache_tictactoe_data_random(
     return data
 
 
-def load_unprocessed_games(
-    data_folder: str,
-    index: int,
-) -> TicTacToeData:
-    filename = "tictactoe_data_200000_no_diagonal_first_two_moves_no_overlap.pkl"
-    data_folder_seed = os.path.join(data_folder, f"seed_{index}")
-    unprocessed_data_path = os.path.join(data_folder_seed, filename)
+# NOT SURE WHY THIS CODE EXISTS, HARDCODED filename IN IT
+# def load_unprocessed_games(
+#     data_folder: str,
+#     index: int,
+# ) -> TicTacToeData:
+#     filename = "tictactoe_data_200000_no_diagonal_first_two_moves_no_overlap.pkl"
+#     data_folder_seed = os.path.join(data_folder, f"seed_{index}")
+#     unprocessed_data_path = os.path.join(data_folder_seed, filename)
 
-    if not os.path.exists(unprocessed_data_path):
-        raise FileNotFoundError(
-            f"Unprocessed data file not found: {unprocessed_data_path}"
-        )
+#     if not os.path.exists(unprocessed_data_path):
+#         raise FileNotFoundError(
+#             f"Unprocessed data file not found: {unprocessed_data_path}"
+#         )
 
-    with open(unprocessed_data_path, "rb") as f:
-        # pickle.load loads to CPU by default
-        unprocessed_data = pickle.load(f)
-    assert isinstance(unprocessed_data, TicTacToeData), (
-        f"Tuple element loaded from {unprocessed_data_path} is not a TicTacToeData object"
-    )
-    return unprocessed_data
+#     with open(unprocessed_data_path, "rb") as f:
+#         # pickle.load loads to CPU by default
+#         unprocessed_data = pickle.load(f)
+#     assert isinstance(unprocessed_data, TicTacToeData), (
+#         f"Tuple element loaded from {unprocessed_data_path} is not a TicTacToeData object"
+#     )
+#     return unprocessed_data
 
 
 def load_split_data(

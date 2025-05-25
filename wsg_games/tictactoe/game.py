@@ -11,8 +11,10 @@ class State(Enum):
 
 
 class Goal(Enum):
-    WEAK_GOAL = 0  # X wins if X has 3 in a row
-    STRONG_GOAL = 1  # defined in get_winner
+    WEAK_GOAL = 0  # X has 3 in a row/column/diagonal -> X wins
+    STRONG_GOAL = (
+        1  # X has 3 in a row/column -> X wins, but 3 in a diagonal -> X looses
+    )
 
     def __str__(self):
         mapping = {
@@ -55,7 +57,10 @@ class Board:
             case _:
                 raise ValueError(f"Unexpected turn of {self.turn}")
 
-    def get_termination_conditions(self) -> tuple[list[str], Player | None]:
+    def get_termination_conditions(
+        self,
+    ) -> tuple[list[tuple[int]], list[str], Player | None]:
+        termination_conditions_field_tuples = []
         termination_conditions = []
         terminating_player = None
         win_conditions = {
@@ -75,22 +80,51 @@ class Board:
                 == self.grid[condition[2]]
             ):
                 terminating_player = self.grid[condition[0]]
+                termination_conditions_field_tuples.append(condition)
                 termination_conditions.append(win_conditions[condition])
 
-        return termination_conditions, terminating_player
+        return (
+            termination_conditions_field_tuples,
+            termination_conditions,
+            terminating_player,
+        )
 
     def _set_game_state(self) -> None:
-        termination_conditions, _ = self.get_termination_conditions()
+        _, termination_conditions, _ = self.get_termination_conditions()
         if termination_conditions or all(cell is not None for cell in self.grid):
             self.game_state = State.OVER
         else:
             self.game_state = State.ONGOING
 
-    def get_winner(self, goal: Goal) -> Player | None:
-        termination_conditions, terminating_player = self.get_termination_conditions()
+    def get_winner(self, goal: Goal) -> tuple[Player | None, bool]:
+        """
+        Returns winner and bool indicating if the winning player
+        finished 3 with the first placed stone in it.
+        """
+        assert self.game_state == State.OVER, "Game is not over yet."
+        assert len(self.moves_played) >= 2, "Only 2 moves played so far."
+        (
+            termination_conditions_field_tuples,
+            termination_conditions,
+            terminating_player,
+        ) = self.get_termination_conditions()
+        if terminating_player is Player.X:
+            first_move = self.moves_played[0]
+        elif terminating_player is Player.O:
+            first_move = self.moves_played[1]
+        else:
+            first_move = -1234  # Impossible move
         match goal:
             case Goal.WEAK_GOAL:
-                return terminating_player
+                if any(
+                    [
+                        first_move in cond_tuple
+                        for cond_tuple in termination_conditions_field_tuples
+                    ]
+                ):
+                    return terminating_player, True
+                else:
+                    return terminating_player, False
             case Goal.STRONG_GOAL:
                 ################################
                 #         No diagonals         #
@@ -100,31 +134,24 @@ class Board:
                     or "bottom left -> top right" in termination_conditions
                 ):
                     match terminating_player:
-                        case None:
-                            return None
                         case Player.X:
-                            return Player.O
+                            return Player.O, False
                         case Player.O:
-                            return Player.X
+                            return Player.X, False
                         case _:
                             raise ValueError(
-                                f"Unexpected terminating_player {terminating_player}"
+                                f"Unexpected terminating_player {terminating_player}. None is forbidden here as well."
                             )
                 else:
-                    return terminating_player
-                ################################
-                #         Reverse rule         #
-                ################################
-                # match terminating_player:
-                #     case None:
-                #         return None
-                #     case Player.X:
-                #         return Player.O
-                #     case Player.O:
-                #         return Player.X
-                #     case _:
-                #         raise ValueError(f"Unexpected terminating_player {terminating_player}")
-                ################################
+                    if any(
+                        [
+                            first_move in cond_tuple
+                            for cond_tuple in termination_conditions_field_tuples
+                        ]
+                    ):
+                        return terminating_player, True
+                    else:
+                        return terminating_player, False
             case _:
                 raise ValueError(f"Unexpected goal {goal}")
 
@@ -215,16 +242,27 @@ def generate_all_games(
 
 
 def minimax(board: Board, goal: Goal) -> int:
-    """Player X is the maximizer and Player O is the minimizer"""
+    """
+    Player X is the maximizer and Player O is the minimizer
+    If a player wins, he gets 1 point. If he completed a row of 3 with his first stone
+    in it, he gets 2.
+    A draw gives 0.
+    """
     if board.game_state == State.OVER:
-        winner = board.get_winner(goal)
+        winner, finished_with_first = board.get_winner(goal)
         match winner:
             case None:
                 return 0  # draw
             case Player.X:
-                return 1
+                if finished_with_first:
+                    return 2
+                else:
+                    return 1
             case Player.O:
-                return -1
+                if finished_with_first:
+                    return -2
+                else:
+                    return -1
             case _:
                 raise ValueError(f"Unexpected winner in minimax {winner}")
     else:  # recursion
