@@ -21,7 +21,8 @@ def compute_and_save(data_folder, seed: int, device: t.device) -> None:
     # Data
     tictactoe_data = cache_tictactoe_data_random(
         data_folder
-        + "tictactoe_data_200000_no_diagonal_first_two_moves_no_overlap.pkl",
+        # + "tictactoe_data_200000_no_diagonal_first_two_moves_no_overlap.pkl",
+        + "tictactoe_data_first_stone_random_no_diagonal_1000000.pkl",
         device,
         seed=seed,
     )
@@ -78,7 +79,9 @@ def compute_and_save(data_folder, seed: int, device: t.device) -> None:
 
 
 if __name__ == "__main__":
-    for seed in range(10):
+    # for seed in range(10):
+    for seed in [8, 9]:
+        print("seed: ", seed)
         data_folder = "/homes/55/bwilop/wsg/data/tictactoe"
         data_folder_seed = data_folder + f"/seed_{seed}/"
         os.makedirs(data_folder_seed, exist_ok=True)
