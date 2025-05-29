@@ -36,6 +36,7 @@ def create_data_shards(
     max_total_tokens: int = 10**8,
     overwrite: bool = False,
 ) -> None:
+    ignore_first_n_moves = game_to_ignore_first_n_moves(game)
     io: str = "out"
     submodule_names = [f"layer_{layer_i}" for layer_i in range(model.cfg.n_layers)]
 
@@ -68,7 +69,7 @@ def create_data_shards(
         for layer_i in range(len(submodule_names)):
             local_activations = rearrange(
                 get_activations(model, games, layer_i),
-                game_to_ignore_first_n_moves(game),
+                ignore_first_n_moves,
             )  # (B x T) x D
             activation_cache[layer_i].append(local_activations.cpu())
 
@@ -242,7 +243,7 @@ def validate_activations(store_dirs: list[str]) -> None:
     Assertions to verify that the activations of list_of_paths fit together,
     i.e. all were trained on same tokens and shapes are correct.
     """
-    activation_cache_tuples = ActivationCacheTuple(store_dirs)
+    activation_cache_tuples = ActivationCacheTuple(*store_dirs)
     stacked_tokens = (
         activation_cache_tuples.tokens
     )  # [len(store_dir), n_games, game_length]
