@@ -215,7 +215,7 @@ def plot_loss_pretrain_models(
         label="Min Achievable Weak Loss",
     )
     ax.set_xscale("log")
-    ax.set_ylim(0, 4)
+    ax.set_ylim(0, 6)
     ax.set_xlabel("Number of Parameters (log scale)")
     ax.set_ylabel("Loss (μ ± σ over indices)")
     ax.set_title(f"Loss vs. Params (Model trained on Goal: {Goal.WEAK_GOAL.value})")
@@ -265,7 +265,7 @@ def plot_loss_pretrain_models(
         label="Min Achievable Strong Loss",
     )
     ax.set_xscale("log")
-    ax.set_ylim(0, 4)
+    ax.set_ylim(0, 6)
     ax.set_xlabel("Number of Parameters (log scale)")
     ax.set_ylabel("Loss (μ ± σ over indices)")
     ax.set_title(f"Loss vs. Params (Model trained on Goal: {Goal.STRONG_GOAL.value})")
@@ -278,7 +278,7 @@ def plot_loss_pretrain_models(
         save_dir = os.path.dirname(save_path)
         if save_dir and not os.path.exists(save_dir):
             os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, "pretrain.png")
+        save_path = os.path.join(save_path, "pretrain.png")
         try:
             plt.savefig(save_path, bbox_inches="tight", dpi=300)
             print(f"Plot saved to {save_path}")

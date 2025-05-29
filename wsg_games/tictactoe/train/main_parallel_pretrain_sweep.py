@@ -122,9 +122,10 @@ if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe/"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe/"
     # project_name = "tictactoe_pretraining"
-    project_name = "tictactoe_pretraining5"
+    project_name = "tictactoe_pretraining6"
     n_indices = 10
     save_path = main_pretrain(data_folder, experiment_folder, project_name, n_indices)
+    print("save_path: ", save_path)
     plot_loss_pretrain_models(
         data_folder,
         experiment_folder,

@@ -122,7 +122,7 @@ def main_finetune_multi_index(
     pretrained_project_name_weak: str,
     pretrained_project_name_strong: str,
     finetuned_project_name: str,
-    n_indices: int,
+    indices,
     training_cfg_finetune: dict,
 ):
     print("Starting finetuning...")
@@ -163,7 +163,7 @@ def main_finetune_multi_index(
     ]
 
     all_jobs: list[Job] = []
-    for index in range(n_indices):
+    for index in indices:
         print(f"\n--- Preparing jobs for Index {index} ---")
         jobs_for_index = 0
         for weak_size, strong_size in finetuning_pairs:
@@ -194,28 +194,27 @@ if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe/"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe/"
 
-    pretrained_project_name_weak = "tictactoe_pretraining5"
-    # pretrained_project_name_strong = "tictactoe_pretraining5"
-    pretrained_project_name_strong = "tictactoe_pretraining_random"
+    pretrained_project_name_weak = "tictactoe_pretraining6"
+    pretrained_project_name_strong = "tictactoe_pretraining6"
+    # pretrained_project_name_strong = "tictactoe_pretraining_random"
 
-    # finetuned_project_name = "tictactoe_finetuning5"
-    # finetuned_project_name = "tictactoe_finetuning_use_best_val_step5"
-    # finetuned_project_name = "tictactoe_finetuning_random5"
-    finetuned_project_name = "tictactoe_finetuning_use_best_val_step_random5"
+    # finetuned_project_name = "tictactoe_finetuning6"
+    finetuned_project_name = "tictactoe_finetuning_use_best_val_step6_lre5_10000"
+    # finetuned_project_name = "tictactoe_finetuning_random6"
+    # finetuned_project_name = "tictactoe_finetuning_use_best_val_step_random6"
 
     training_cfg_finetune = get_training_cfg_finetune()
-    training_cfg_finetune["use_best_val_checkpoint"] = True
 
     n_indices = 10
-    # finetuned_project_experiment_folder = main_finetune_multi_index(
-    #     data_folder,
-    #     experiment_folder,
-    #     pretrained_project_name_weak,
-    #     pretrained_project_name_strong,
-    #     finetuned_project_name,
-    #     n_indices,
-    #     training_cfg_finetune,
-    # )
+    finetuned_project_experiment_folder = main_finetune_multi_index(
+        data_folder,
+        experiment_folder,
+        pretrained_project_name_weak,
+        pretrained_project_name_strong,
+        finetuned_project_name,
+        range(n_indices),
+        training_cfg_finetune,
+    )
     finetuned_project_experiment_folder = os.path.join(
         experiment_folder, finetuned_project_name
     )

@@ -15,10 +15,10 @@ def get_training_cfg():
 
 def get_training_cfg_finetune():
     training_cfg_finetune = {
-        "learning_rate": 1e-3,
+        "learning_rate": 1e-5,  # 1e-3
         "weight_decay": 1e-4,
         "max_epochs": 1000,
-        "early_stopping_patience_after_each_optimizer_step": 100,
+        "early_stopping_patience_after_each_optimizer_step": 10000,  # 100
         "use_best_val_checkpoint": True,
         "batch_size": 64,
     }

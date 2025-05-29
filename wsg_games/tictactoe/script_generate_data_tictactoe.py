@@ -80,7 +80,7 @@ def compute_and_save(data_folder, seed: int, device: t.device) -> None:
 
 if __name__ == "__main__":
     # for seed in range(10):
-    for seed in [8, 9]:
+    for seed in [4]:
         print("seed: ", seed)
         data_folder = "/homes/55/bwilop/wsg/data/tictactoe"
         data_folder_seed = data_folder + f"/seed_{seed}/"
