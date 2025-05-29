@@ -7,6 +7,7 @@ from dictionary_learning.dictionary_learning.cache import *
 import transformer_lens.utils as utils
 from transformer_lens import HookedTransformer
 
+from wsg_games.meta import Game, game_to_ignore_first_n_moves
 from wsg_games.tictactoe.train.train import rearrange
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.train.save_load_models import load_model, load_finetuned_model
@@ -26,6 +27,7 @@ def get_activations(
 
 @t.no_grad()
 def create_data_shards(
+    game: Game,
     games_data: Float[Tensor, "n_games game_length"],
     model: HookedTransformer,
     store_dir: str,
@@ -65,7 +67,8 @@ def create_data_shards(
 
         for layer_i in range(len(submodule_names)):
             local_activations = rearrange(
-                get_activations(model, games, layer_i)
+                get_activations(model, games, layer_i),
+                game_to_ignore_first_n_moves(game),
             )  # (B x T) x D
             activation_cache[layer_i].append(local_activations.cpu())
 
@@ -107,7 +110,16 @@ def create_data_shards(
     token_path = os.path.join(store_dir, "tokens.pt")
     print(f"Storing tokens in {token_path}")
     token_cache = t.cat(token_cache, dim=0)
-    assert token_cache.shape[0] * token_cache.shape[1] == total_size
+    print("token_cache.shape: ", token_cache.shape)
+    print("total_size: ", total_size)
+    print(
+        "token_cache.shape[1] - ignore_first_n_moves: ",
+        token_cache.shape[1] - ignore_first_n_moves,
+    )
+    assert (
+        token_cache.shape[0] * (token_cache.shape[1] - ignore_first_n_moves)
+        == total_size
+    )
     t.save(token_cache, token_path)
 
     # store configs
@@ -116,6 +128,7 @@ def create_data_shards(
         with open(os.path.join(store_dir, "config.json"), "w") as f:
             json.dump(
                 {
+                    "ignore_first_n_moves": ignore_first_n_moves,
                     "batch_size": batch_size,
                     "context_len": -1,
                     "shard_size": shard_size,
@@ -154,6 +167,7 @@ def get_activations_path(
 
 
 def compute_activations(
+    game: Game,
     model_goal: Goal | None,
     project_name_pretrain: str | None,
     weak_model_size: str | None,
@@ -211,6 +225,7 @@ def compute_activations(
         else:
             raise ValueError(f"Invalid train_val: {train_val}")
         create_data_shards(
+            game,
             games_data,
             model,
             store_dir=activations_path,

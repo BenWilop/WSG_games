@@ -12,9 +12,10 @@ from transformer_lens.utilities.devices import move_to_and_update_config
 from wsg_games.tictactoe.evals import evaluate_predictions, sample_games, eval_model
 from wsg_games.tictactoe.data import TicTacToeData, random_sample_tictactoe_data
 from wsg_games.tictactoe.game import Goal
+from wsg_games.meta import Game, game_to_ignore_first_n_moves
 
 
-def rearrange(tensor: t.Tensor) -> t.Tensor:
+def rearrange(tensor: t.Tensor, game: Game = Game.TIC) -> t.Tensor:
     """
     Prepares data from game dimensionality to 2D for evaluation.
 
@@ -22,7 +23,10 @@ def rearrange(tensor: t.Tensor) -> t.Tensor:
     This converts a tensor of shape [n_games, game_length, n_tokens]
     into [n_games * game_length, n_tokens] which is what a loss_fn such as F.cross_entropy expects.
     """
-    return einops.rearrange(tensor[:, 2:, :], "batch seq token -> (batch seq) token")
+    ignore_first_n_moves = game_to_ignore_first_n_moves(game)
+    return einops.rearrange(
+        tensor[:, ignore_first_n_moves:, :], "batch seq token -> (batch seq) token"
+    )
 
 
 def log_epoch_wandb(
