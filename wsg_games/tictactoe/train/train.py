@@ -15,7 +15,7 @@ from wsg_games.tictactoe.game import Goal
 from wsg_games.meta import Game, game_to_ignore_first_n_moves
 
 
-def rearrange(tensor: t.Tensor, game: Game = Game.TIC) -> t.Tensor:
+def rearrange(tensor: t.Tensor, game: Game = Game.TICTACTOE) -> t.Tensor:
     """
     Prepares data from game dimensionality to 2D for evaluation.
 

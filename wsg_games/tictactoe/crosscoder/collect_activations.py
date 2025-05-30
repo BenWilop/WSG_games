@@ -46,8 +46,8 @@ def create_data_shards(
         os.path.join(store_dir, f"{submodule_names[layer_i]}_{io}")
         for layer_i in range(len(submodule_names))
     ]
-    for store_dir in store_dirs:
-        os.makedirs(store_dir, exist_ok=True)
+    for dir in store_dirs:
+        os.makedirs(dir, exist_ok=True)
     total_size = 0
     current_size = 0
     shard_count = 0
@@ -69,7 +69,7 @@ def create_data_shards(
         for layer_i in range(len(submodule_names)):
             local_activations = rearrange(
                 get_activations(model, games, layer_i),
-                ignore_first_n_moves,
+                game=game,
             )  # (B x T) x D
             activation_cache[layer_i].append(local_activations.cpu())
 
@@ -125,8 +125,8 @@ def create_data_shards(
 
     # store configs
     print(f"Storing configs.")
-    for i, store_dir in enumerate(store_dirs):
-        with open(os.path.join(store_dir, "config.json"), "w") as f:
+    for i, dir in enumerate(store_dirs):
+        with open(os.path.join(dir, "config.json"), "w") as f:
             json.dump(
                 {
                     "ignore_first_n_moves": ignore_first_n_moves,
