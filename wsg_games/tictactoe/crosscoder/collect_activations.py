@@ -2,7 +2,6 @@ import torch as t
 from jaxtyping import Float
 from torch import Tensor
 
-from dictionary_learning.dictionary_learning.training import trainSAE
 from dictionary_learning.dictionary_learning.cache import *
 import transformer_lens.utils as utils
 from transformer_lens import HookedTransformer
