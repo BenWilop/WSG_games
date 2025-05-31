@@ -105,6 +105,7 @@ def create_data_shards(
             multiprocessing=False,
         )
         total_size += current_size
+        shard_count += 1
 
     # Store tokens
     token_path = os.path.join(store_dir, "tokens.pt")
@@ -243,6 +244,15 @@ def validate_activations(store_dirs: list[str]) -> None:
     i.e. all were trained on same tokens and shapes are correct.
     """
     activation_cache_tuples = ActivationCacheTuple(*store_dirs)
+
+    # The length of all ActivationCache must match in config and tensor
+    n_tokens = len(activation_cache_tuples)
+    for activation_cache in activation_cache_tuples.activation_caches:
+        assert n_tokens == len(activation_cache)
+        assert activation_cache.config["total_size"] == n_tokens
+        activation_cache[n_tokens - 1]
+
+    # All token values must be the same
     stacked_tokens = (
         activation_cache_tuples.tokens
     )  # [len(store_dir), n_games, game_length]
