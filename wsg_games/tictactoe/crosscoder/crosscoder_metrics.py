@@ -9,10 +9,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from dataclasses import dataclass
 from typing import Any, Iterator
+import seaborn as sns
 
 from dictionary_learning.dictionary_learning import CrossCoder
 from dictionary_learning.dictionary_learning.dictionary import BatchTopKCrossCoder
-from dictionary_learning.dictionary_learning.training import trainSAE
+from dictionary_learning.dictionary_learning.cache import *
 
 
 @dataclass
@@ -122,7 +123,7 @@ class CrosscoderMetrics:
             val_dataset,
             batch_size=1000,
             shuffle=False,
-            num_workers=1,
+            num_workers=0,
             pin_memory=True,
         )
         for activations_both in tqdm(val_dataloader, desc=tqdm_desc):
@@ -190,11 +191,14 @@ class CrosscoderMetrics:
 
         return beta_r, beta_e
 
-    def compute_top_n_activations(top_n: int) -> Float[Tensor, "n_features top_n"]:
+    def compute_top_n_activations(
+        self, top_n: int
+    ) -> Float[Tensor, "n_features top_n"]:
         """
         Creates tensor that maps from feature j to the indicies of the top n activations of that feature.
         The indices are for # TODO
         """
+        pass
 
     def get_delta_thresholds(
         self, threshold_only: float = 0.1, threshold_shared: float = 0.1
