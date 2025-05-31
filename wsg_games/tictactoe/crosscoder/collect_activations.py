@@ -1,5 +1,5 @@
 import torch as t
-from jaxtyping import Float
+from jaxtyping import Float, Int
 from torch import Tensor
 
 from dictionary_learning.dictionary_learning.cache import *
@@ -121,7 +121,7 @@ def create_data_shards(
         token_cache.shape[0] * (token_cache.shape[1] - ignore_first_n_moves)
         == total_size
     )
-    t.save(token_cache, token_path)
+    t.save(token_cache, token_path)  # [n_games, game_length]
 
     # store configs
     print(f"Storing configs.")
@@ -181,6 +181,10 @@ def compute_activations(
     experiment_folder: str,
     device: t.device,
 ) -> None:
+    """
+    Trains crosscoder on the test data
+    Validates on the validation data
+    """
     # Either finetuned or pretrained
     bool_finetuned_model = (
         project_name_finetune is not None and weak_model_size is not None
@@ -252,6 +256,13 @@ def validate_activations(store_dirs: list[str]) -> None:
         assert activation_cache.config["total_size"] == n_tokens
         activation_cache[n_tokens - 1]
 
+    # The "ignore_first_n_moves" must be the same everywhere.
+    ignore_first_n_moves = activation_cache_tuples.activation_caches[0].config[
+        "ignore_first_n_moves"
+    ]
+    for activation_cache in activation_cache_tuples.activation_caches:
+        assert activation_cache.config["ignore_first_n_moves"] == ignore_first_n_moves
+
     # All token values must be the same
     stacked_tokens = (
         activation_cache_tuples.tokens
@@ -261,3 +272,35 @@ def validate_activations(store_dirs: list[str]) -> None:
         assert th.equal(token_0, stacked_tokens[i]), (
             "Tokens of all activations must be the same to compare them with a Crosscoder."
         )
+
+
+def get_list_of_games_from_paired_activation_cache(
+    paired_activation_cache: PairedActivationCache, indices: Int[Tensor, "batch"]
+) -> list[list[int]]:
+    """
+    Returns for each index (relating to the activations of paired_activation_cache)
+    the subgame up until the move where the activation was created.
+    So for the game [0,1,2,3,4,5,6,7,8,9], if we have as indices [3,6], because we
+    relate to the activations collected after the 4th and 7th token, we return:
+    list_of_games = [[0,1,2,3], [0,1,2,3,4,5,6]]
+    """
+    tokens = paired_activation_cache.tokens[0]  # [n_games, game_length]
+    assert tokens.ndim == 2
+    n_games, game_length = tokens.shape
+    ignore_first_n_moves = paired_activation_cache.activation_cache_1.config[
+        "ignore_first_n_moves"
+    ]
+    assert 0 <= ignore_first_n_moves < game_length
+    n_activations = paired_activation_cache.activation_cache_1.config["total_size"]
+    list_of_games: list[list[int]] = []
+    for index in indices.cpu():
+        assert 0 <= index < n_activations
+        game_idx = index // (game_length - ignore_first_n_moves)
+        idx_in_game = (
+            index % (game_length - ignore_first_n_moves) + ignore_first_n_moves
+        )
+        assert 0 <= idx_in_game < game_length
+        game = tokens[game_idx, 0:idx_in_game]
+        list_of_games.append(game.tolist())
+
+    return list_of_games

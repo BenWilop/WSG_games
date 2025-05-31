@@ -15,6 +15,11 @@ from dictionary_learning.dictionary_learning import CrossCoder
 from dictionary_learning.dictionary_learning.dictionary import BatchTopKCrossCoder
 from dictionary_learning.dictionary_learning.cache import *
 
+from wsg_games.utils import IndexedDataset
+from wsg_games.tictactoe.crosscoder.collect_activations import (
+    get_list_of_games_from_paired_activation_cache,
+)
+
 
 @dataclass
 class CrosscoderMetrics:
@@ -114,26 +119,37 @@ class CrosscoderMetrics:
         )
         return delta_norms.cpu()
 
-    def _activations_both_generator(self, tqdm_desc) -> Iterator[t.Tensor]:
+    def _activations_both_generator(
+        self, tqdm_desc, return_list_of_games: bool = False
+    ) -> Iterator[t.Tensor]:
+        """
+        The crosscoder got trained on the test data, so now we evaluate on the validation data.
+        """
         val_dataset = PairedActivationCache(
             self.train_crosscoder_args["data_path"]["val_activations_stor_dir_model_0"],
             self.train_crosscoder_args["data_path"]["val_activations_stor_dir_model_1"],
         )
         val_dataloader = DataLoader(
-            val_dataset,
+            IndexedDataset(val_dataset),
             batch_size=1000,
             shuffle=False,
             num_workers=0,
             pin_memory=True,
         )
-        for activations_both in tqdm(val_dataloader, desc=tqdm_desc):
+        for activations_both, indices in tqdm(val_dataloader, desc=tqdm_desc):
             # Move activations_both to device
             activations_model_0_dev = activations_both[0].to(self.device)
             activations_model_1_dev = activations_both[1].to(self.device)
             activations_both = t.stack(
                 [activations_model_0_dev, activations_model_1_dev], dim=1
             )
-            yield activations_both
+            if return_list_of_games:
+                list_of_games = get_list_of_games_from_paired_activation_cache(
+                    val_dataset, indices
+                )
+                yield activations_both, list_of_games
+            else:
+                yield activations_both
 
     def compute_beta(
         self, model_i: int, device: t.device
