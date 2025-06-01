@@ -58,6 +58,12 @@ class CrosscoderMetrics:
         # self.nu_error = self.beta_error_model_0 / self.beta_error_model_1
         # self.plot_nu()
         # self.top_n_activations = self.compute_top_n_activations(top_n=9)
+        (
+            self.hist_token_activation,
+            self.hist_token_activation_topk,
+            self.hist_f_j,
+            self.hist_f_j_topk,
+        ) = self.compute_hist_activations()
 
     # Save + Load
     def save(self, save_dir: str) -> None:
@@ -307,6 +313,20 @@ class CrosscoderMetrics:
             threshold_shared_upper,
         )
 
+    def compute_hist_activations(
+        self,
+    ) -> tuple[HistogramData, HistogramData, HistogramData, HistogramData]:
+        """
+        Computes histograms over different activations.
+        """
+
+        return (
+            hist_token_activation,
+            hist_token_activation_topk,
+            hist_f_j,
+            hist_f_j_topk,
+        )
+
     def plot_delta_norms(self) -> tuple[plt.Figure, list[plt.Axes]]:
         """
         Plots a histogram of delta norms with two subplots: one with linear y-axis and one with logarithmic y-axis.
@@ -535,3 +555,18 @@ class CrosscoderMetrics:
                 print(f"Error saving nu plot: {e}")
 
         return g.fig
+
+    def plot_histograms_grid() -> plt.Figure:
+        """
+        Creates a 2x2 grid of histograms from pre-computed HistogramData objects.
+        """
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+
+        self.hist_token_activation.plot_single_histogram(axes[0, 0])
+        self.hist_token_activation_topk.plot_single_histogram(axes[1, 0])
+        self.hist_f_j.plot_single_histogram(axes[0, 1])
+        self.hist_f_j_topk.plot_single_histogram(axes[1, 1])
+
+        fig.suptitle("Feature Activation Analysis Histograms", fontsize=16, y=0.98)
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        return fig
