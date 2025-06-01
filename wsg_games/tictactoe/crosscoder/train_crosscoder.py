@@ -132,6 +132,7 @@ def train_crosscoder(
     print(f"Activation dim: {activation_dim}")
     print(f"Dictionary size: {dictionary_size}")
     k = training_cfg_cross_coder["k"]
+    assert 0 < k <= dictionary_size
     lr = training_cfg_cross_coder["learning_rate"]
     max_steps = training_cfg_cross_coder["max_steps"]
 

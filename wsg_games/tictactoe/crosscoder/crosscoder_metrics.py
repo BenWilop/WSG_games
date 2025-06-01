@@ -15,7 +15,7 @@ from dictionary_learning.dictionary_learning import CrossCoder
 from dictionary_learning.dictionary_learning.dictionary import BatchTopKCrossCoder
 from dictionary_learning.dictionary_learning.cache import *
 
-from wsg_games.utils import IndexedDataset
+from wsg_games.utils import IndexedDataset, HistogramData
 from wsg_games.tictactoe.crosscoder.collect_activations import (
     get_list_of_games_from_paired_activation_cache,
 )
@@ -63,7 +63,8 @@ class CrosscoderMetrics:
             self.hist_token_activation_topk,
             self.hist_f_j,
             self.hist_f_j_topk,
-        ) = self.compute_hist_activations()
+        ) = self.compute_activation_histograms()
+        self.plot_activation_histograms()
 
     # Save + Load
     def save(self, save_dir: str) -> None:
@@ -218,6 +219,31 @@ class CrosscoderMetrics:
 
         return beta_r, beta_e
 
+    def get_delta_thresholds(
+        self, threshold_only: float = 0.1, threshold_shared: float = 0.1
+    ):
+        """
+        Returns the thresholds for delta norms based on the provided parameters.
+        """
+        threshold_model_0_only = threshold_only
+        threshold_model_1_only = 1 - threshold_only
+        threshold_shared_lower = 0.5 - threshold_shared
+        threshold_shared_upper = 0.5 + threshold_shared
+        assert (
+            threshold_model_0_only
+            < threshold_shared_lower
+            < threshold_shared_upper
+            < threshold_model_1_only
+        ), (
+            f"Invalid thresholds: {threshold_model_0_only}, {threshold_shared_lower}, {threshold_shared_upper}, {threshold_model_1_only}"
+        )
+        return (
+            threshold_model_0_only,
+            threshold_model_1_only,
+            threshold_shared_lower,
+            threshold_shared_upper,
+        )
+
     def compute_top_n_activations(self, top_n: int) -> dict[int, list[list[int]]]:
         """
         Creates tensor that maps from feature j to the indicies of the top n activations of that feature.
@@ -288,37 +314,107 @@ class CrosscoderMetrics:
 
         return j_to_list_subgames
 
-    def get_delta_thresholds(
-        self, threshold_only: float = 0.1, threshold_shared: float = 0.1
-    ):
-        """
-        Returns the thresholds for delta norms based on the provided parameters.
-        """
-        threshold_model_0_only = threshold_only
-        threshold_model_1_only = 1 - threshold_only
-        threshold_shared_lower = 0.5 - threshold_shared
-        threshold_shared_upper = 0.5 + threshold_shared
-        assert (
-            threshold_model_0_only
-            < threshold_shared_lower
-            < threshold_shared_upper
-            < threshold_model_1_only
-        ), (
-            f"Invalid thresholds: {threshold_model_0_only}, {threshold_shared_lower}, {threshold_shared_upper}, {threshold_model_1_only}"
-        )
-        return (
-            threshold_model_0_only,
-            threshold_model_1_only,
-            threshold_shared_lower,
-            threshold_shared_upper,
-        )
-
-    def compute_hist_activations(
+    def compute_activation_histograms(
         self,
+        f_j_active_threshold: float = 1e-5,
     ) -> tuple[HistogramData, HistogramData, HistogramData, HistogramData]:
         """
         Computes histograms over different activations.
         """
+        dict_size = self.crosscoder.dict_size
+        token_activation_counts = np.zeros(dict_size, dtype=np.int64)  # Top-Left
+        token_activation_topk_counts = np.zeros(
+            dict_size, dtype=np.int64
+        )  # Bottom-Left
+        min_e = -5
+        max_e = 5
+        n_bins = max_e - min_e + 1  # one for 0
+        bins_f_j = np.logspace(10**min_e, 10**max_e, n_bins + 1)
+        f_j_count = np.zeros(n_bins, dtype=np.int64)  # Top-Right
+        f_j_topk_count = np.zeros(n_bins, dtype=np.int64)  # Bottom-Right
+
+        k = self.config["k"]
+        total_tokens_processed = 0
+        self.crosscoder.eval()
+        with t.no_grad():
+            for activations in self._activations_both_generator(
+                "Create activation histograms"
+            ):  # [batch_size, 2, d_model]
+                total_tokens_processed += activations.shape[0]
+                f_j = self.crosscoder.get_activations(
+                    activations
+                )  # [batch_size, dict_size]
+
+                # hist_token_activation (Top-Left)
+                is_active_mask = f_j > f_j_active_threshold
+                token_activation_counts += is_active_mask
+
+                # hist_token_activation_topk (Bottom-Left)
+                _, top_k_indices = t.topk(f_j, k=k, dim=1)
+                is_in_top_k_mask = t.zeros_like(f_j, dtype=t.bool)
+                is_in_top_k_mask.scatter_(dim=1, index=top_k_indices.long(), value=True)
+                token_activation_topk_counts += (
+                    is_in_top_k_mask.sum(dim=0).cpu().numpy()
+                )
+
+                # hist_f_j (Top-Right)
+                active_f_j_values = f_j[is_active_mask].cpu().numpy()
+                if active_f_j_values.size > 0:
+                    hist_counts, _ = np.histogram(active_f_j_values, bins=bins_f_j)
+                    f_j_count += hist_counts
+
+                # hist_f_j_topk (Bottom-Right)
+                top_k_and_active_mask = is_in_top_k_mask & is_active_mask
+                active_top_k_f_j_values_batch = f_j[top_k_and_active_mask].cpu().numpy()
+                if active_top_k_f_j_values_batch.size > 0:
+                    hist_counts_topk, _ = np.histogram(
+                        active_top_k_f_j_values_batch, bins=bins_f_j
+                    )
+                    f_j_topk_count += hist_counts_topk
+
+        # hist_token_activation (Top-Left)
+        data_tl = token_activation_counts / total_tokens_processed
+        hist_token_activation = HistogramData(
+            raw_values=data_tl,
+            bins=np.linspace(0, 1, 101),
+            title=f"Feature Activation Freq. (P(act > {f_j_active_threshold:.0e}))",
+            xlabel="Fraction of Tokens Feature is Active",
+            ylabel="Number of Features",
+            y_scale_log=True,
+        )
+
+        # hist_token_activation_topk (Bottom-Left)
+        data_bl = token_activation_counts / total_tokens_processed
+        hist_token_activation_topk = HistogramData(
+            raw_values=data_bl,
+            bins=np.linspace(0, 1, 101),
+            title=f"Feature Top-K Freq. (P(feature in token's Top-{k}))",
+            xlabel=f"Fraction of Tokens Feature is in Top-{k}",
+            ylabel="Number of Features",
+            y_scale_log=True,
+        )
+
+        # hist_f_j (Top-Right)
+        hist_f_j = HistogramData(
+            counts=f_j_count,
+            bins=bins_f_j,
+            title=f"Active Feature Values (> {f_j_active_threshold:.0e})",
+            xlabel="Feature Activation Value",
+            ylabel="Count",
+            x_scale_log=True,
+            y_scale_log=True,
+        )
+
+        # hist_f_j_topk (Bottom-Right)
+        hist_f_j_topk = HistogramData(
+            counts=f_j_topk_count,
+            bins=bins_f_j,
+            title=f"Top-{k} Active Feature Values (> {activity_threshold:.0e})",
+            xlabel="Feature Activation Value",
+            ylabel="Count",
+            x_scale_log=True,
+            y_scale_log=True,
+        )
 
         return (
             hist_token_activation,
@@ -556,7 +652,7 @@ class CrosscoderMetrics:
 
         return g.fig
 
-    def plot_histograms_grid() -> plt.Figure:
+    def plot_activation_histograms(self) -> plt.Figure:
         """
         Creates a 2x2 grid of histograms from pre-computed HistogramData objects.
         """
@@ -569,4 +665,16 @@ class CrosscoderMetrics:
 
         fig.suptitle("Feature Activation Analysis Histograms", fontsize=16, y=0.98)
         plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+        # Save plot
+        filename = f"activation_histograms.png"
+        if self.save_dir:
+            os.makedirs(self.save_dir, exist_ok=True)
+            save_path = os.path.join(self.save_dir, filename)
+            try:
+                fig.savefig(save_path)
+                print(f"Activation histograms plot saved to {save_path}")
+            except Exception as e:
+                print(f"Error saving plot: {e}")
+
         return fig
