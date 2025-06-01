@@ -316,20 +316,22 @@ class CrosscoderMetrics:
 
     def compute_activation_histograms(
         self,
-        f_j_active_threshold: float = 1e-5,
+        f_j_active_threshold_e: int = -5,
     ) -> tuple[HistogramData, HistogramData, HistogramData, HistogramData]:
         """
         Computes histograms over different activations.
         """
+        f_j_active_threshold = 10**f_j_active_threshold_e
+
         dict_size = self.crosscoder.dict_size
         token_activation_counts = np.zeros(dict_size, dtype=np.int64)  # Top-Left
         token_activation_topk_counts = np.zeros(
             dict_size, dtype=np.int64
         )  # Bottom-Left
-        min_e = -5
+        min_e = min(-5, f_j_active_threshold_e)
         max_e = 5
-        n_bins = max_e - min_e + 1  # one for 0
-        bins_f_j = np.logspace(10**min_e, 10**max_e, n_bins + 1)
+        n_bins = 5 * (max_e - min_e) + 1  # one for 0
+        bins_f_j = np.logspace(min_e, max_e, n_bins + 1)
         f_j_count = np.zeros(n_bins, dtype=np.int64)  # Top-Right
         f_j_topk_count = np.zeros(n_bins, dtype=np.int64)  # Bottom-Right
 
@@ -338,7 +340,7 @@ class CrosscoderMetrics:
         self.crosscoder.eval()
         with t.no_grad():
             for activations in self._activations_both_generator(
-                "Create activation histograms"
+                "Create activation histograms", return_indices=False
             ):  # [batch_size, 2, d_model]
                 total_tokens_processed += activations.shape[0]
                 f_j = self.crosscoder.get_activations(
@@ -347,7 +349,7 @@ class CrosscoderMetrics:
 
                 # hist_token_activation (Top-Left)
                 is_active_mask = f_j > f_j_active_threshold
-                token_activation_counts += is_active_mask
+                token_activation_counts += is_active_mask.sum(dim=0).cpu().numpy()
 
                 # hist_token_activation_topk (Bottom-Left)
                 _, top_k_indices = t.topk(f_j, k=k, dim=1)
@@ -373,9 +375,12 @@ class CrosscoderMetrics:
                     f_j_topk_count += hist_counts_topk
 
         # hist_token_activation (Top-Left)
-        data_tl = token_activation_counts / total_tokens_processed
+        bins_activations = np.linspace(0, 1, 101)
+        counts_activations, _ = np.histogram(
+            (token_activation_counts / total_tokens_processed), bins=bins_activations
+        )
         hist_token_activation = HistogramData(
-            raw_values=data_tl,
+            frequencies=counts_activations,
             bins=np.linspace(0, 1, 101),
             title=f"Feature Activation Freq. (P(act > {f_j_active_threshold:.0e}))",
             xlabel="Fraction of Tokens Feature is Active",
@@ -384,9 +389,12 @@ class CrosscoderMetrics:
         )
 
         # hist_token_activation_topk (Bottom-Left)
-        data_bl = token_activation_counts / total_tokens_processed
+        counts_activations_topk, _ = np.histogram(
+            (token_activation_topk_counts / total_tokens_processed),
+            bins=bins_activations,
+        )
         hist_token_activation_topk = HistogramData(
-            raw_values=data_bl,
+            frequencies=counts_activations_topk,
             bins=np.linspace(0, 1, 101),
             title=f"Feature Top-K Freq. (P(feature in token's Top-{k}))",
             xlabel=f"Fraction of Tokens Feature is in Top-{k}",
@@ -396,7 +404,7 @@ class CrosscoderMetrics:
 
         # hist_f_j (Top-Right)
         hist_f_j = HistogramData(
-            counts=f_j_count,
+            frequencies=f_j_count,
             bins=bins_f_j,
             title=f"Active Feature Values (> {f_j_active_threshold:.0e})",
             xlabel="Feature Activation Value",
@@ -407,9 +415,9 @@ class CrosscoderMetrics:
 
         # hist_f_j_topk (Bottom-Right)
         hist_f_j_topk = HistogramData(
-            counts=f_j_topk_count,
+            frequencies=f_j_topk_count,
             bins=bins_f_j,
-            title=f"Top-{k} Active Feature Values (> {activity_threshold:.0e})",
+            title=f"Top-{k} Active Feature Values (> {f_j_active_threshold:.0e})",
             xlabel="Feature Activation Value",
             ylabel="Count",
             x_scale_log=True,
@@ -658,10 +666,10 @@ class CrosscoderMetrics:
         """
         fig, axes = plt.subplots(2, 2, figsize=(16, 12))
 
-        self.hist_token_activation.plot_single_histogram(axes[0, 0])
-        self.hist_token_activation_topk.plot_single_histogram(axes[1, 0])
-        self.hist_f_j.plot_single_histogram(axes[0, 1])
-        self.hist_f_j_topk.plot_single_histogram(axes[1, 1])
+        self.hist_token_activation.plot_histogram_data(axes[0, 0])
+        self.hist_token_activation_topk.plot_histogram_data(axes[1, 0])
+        self.hist_f_j.plot_histogram_data(axes[0, 1])
+        self.hist_f_j_topk.plot_histogram_data(axes[1, 1])
 
         fig.suptitle("Feature Activation Analysis Histograms", fontsize=16, y=0.98)
         plt.tight_layout(rect=[0, 0, 1, 0.95])

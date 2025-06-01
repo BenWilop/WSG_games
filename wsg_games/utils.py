@@ -24,7 +24,7 @@ class HistogramData:
     Stores data and configuration for plotting a single histogram.
     """
 
-    data_values: np.ndarray
+    frequencies: np.ndarray
     bins: np.ndarray  # Sequence of bin edges (length N+1 for N bins)
     title: str = ""
     xlabel: str = ""
@@ -37,8 +37,8 @@ class HistogramData:
         """
         Plots on a given Matplotlib Axes.
         """
-        assert len(self.bins) == len(self.data_values) + 1
-        if self.data_values.size == 0:
+        assert len(self.bins) == len(self.frequencies) + 1
+        if self.frequencies.size == 0:
             ax.text(
                 0.5,
                 0.5,
@@ -50,9 +50,12 @@ class HistogramData:
                 color="gray",
             )
         else:
-            ax.hist(
-                self.data_values,
-                bins=self.bins,
+            bin_centers = (self.bins[:-1] + self.bins[1:]) / 2.0
+            widths = np.diff(self.bins)
+            ax.bar(
+                bin_centers,
+                self.frequencies,
+                width=widths,
                 color=self.color,
                 alpha=0.7,
                 edgecolor="black",
@@ -81,7 +84,7 @@ class HistogramData:
                 new_ymin = 0.1
                 current_ymax = new_ymin * 10
             ax.set_ylim(bottom=new_ymin, top=current_ymax)
-            if self.data_values.size == 0:
+            if self.frequencies.size == 0:
                 ax.set_ylim(bottom=0.1, top=1)
 
         ax.grid(True, linestyle="--", alpha=0.6)
