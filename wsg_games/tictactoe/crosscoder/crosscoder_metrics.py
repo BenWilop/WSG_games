@@ -43,17 +43,17 @@ class CrosscoderMetrics:
         self.train_crosscoder_args = self.load_train_crosscoder_args(save_dir)
         self.config = self.load_config(self.save_dir)
         self.crosscoder = self.load_model(self.save_dir, device)
-        self.delta_norms = self.compute_delta_norms()
-        self.beta_reconstruction_model_0, self.beta_error_model_0 = self.compute_beta(
-            model_i=0, device=self.device
-        )
-        self.beta_reconstruction_model_1, self.beta_error_model_1 = self.compute_beta(
-            model_i=1, device=self.device
-        )
-        self.nu_reconstruction = (
-            self.beta_reconstruction_model_0 / self.beta_reconstruction_model_1
-        )
-        self.nu_error = self.beta_error_model_0 / self.beta_error_model_1
+        # self.delta_norms = self.compute_delta_norms()
+        # self.beta_reconstruction_model_0, self.beta_error_model_0 = self.compute_beta(
+        #     model_i=0, device=self.device
+        # )
+        # self.beta_reconstruction_model_1, self.beta_error_model_1 = self.compute_beta(
+        #     model_i=1, device=self.device
+        # )
+        # self.nu_reconstruction = (
+        #     self.beta_reconstruction_model_0 / self.beta_reconstruction_model_1
+        # )
+        # self.nu_error = self.beta_error_model_0 / self.beta_error_model_1
         self.top_n_activations = self.compute_top_n_activations(top_n=9)
         self.plot_delta_norms()
         self.plot_betas()
@@ -146,8 +146,8 @@ class CrosscoderMetrics:
         _, val_dataloader = self._get_val_data_set_and_dataloader()
         for activations, indices in tqdm(val_dataloader, desc=tqdm_desc):
             # Move activations_both to device
-            activations_model_0_dev = activations[0].to(self.device)
-            activations_model_1_dev = activations[1].to(self.device)
+            activations_model_0_dev = activations[:, 0, :].to(self.device)
+            activations_model_1_dev = activations[:, 1, :].to(self.device)
             activations = t.stack(
                 [activations_model_0_dev, activations_model_1_dev], dim=1
             )
