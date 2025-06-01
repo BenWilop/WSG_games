@@ -1,6 +1,6 @@
 import torch as t
 from torch import Tensor
-from jaxtyping import Float
+from jaxtyping import Float, Int
 import os
 import pickle
 import json
@@ -35,7 +35,7 @@ class CrosscoderMetrics:
     beta_error_model_1: Float[Tensor, "n_features"]
     nu_reconstruction: Float[Tensor, "n_features"]
     nu_error: Float[Tensor, "n_features"]
-    top_n_activations: Float[Tensor, "n_features top_n"]
+    top_n_activations: dict[int, list[list[int]]]  # feature_index -> list of subgames
 
     def __init__(self, save_dir: str, device: t.device) -> None:
         self.save_dir = save_dir
@@ -119,12 +119,7 @@ class CrosscoderMetrics:
         )
         return delta_norms.cpu()
 
-    def _activations_both_generator(
-        self, tqdm_desc, return_list_of_games: bool = False
-    ) -> Iterator[t.Tensor]:
-        """
-        The crosscoder got trained on the test data, so now we evaluate on the validation data.
-        """
+    def _get_val_data_set_and_dataloader(self) -> DataLoader:
         val_dataset = PairedActivationCache(
             self.train_crosscoder_args["data_path"]["val_activations_stor_dir_model_0"],
             self.train_crosscoder_args["data_path"]["val_activations_stor_dir_model_1"],
@@ -136,20 +131,30 @@ class CrosscoderMetrics:
             num_workers=0,
             pin_memory=True,
         )
-        for activations_both, indices in tqdm(val_dataloader, desc=tqdm_desc):
+        return val_dataset, val_dataloader
+
+    def _activations_both_generator(
+        self,
+        tqdm_desc,
+        return_indices: bool = False,
+    ) -> Iterator[t.Tensor] | Iterator[tuple[t.Tensor, t.Tensor]]:
+        # activations: Tensor[Float, batch_size, 2, d_model]
+        # indices: Tensor[Int, batch_size]
+        """
+        The crosscoder got trained on the test data, so now we evaluate on the validation data.
+        """
+        _, val_dataloader = self._get_val_data_set_and_dataloader()
+        for activations, indices in tqdm(val_dataloader, desc=tqdm_desc):
             # Move activations_both to device
-            activations_model_0_dev = activations_both[0].to(self.device)
-            activations_model_1_dev = activations_both[1].to(self.device)
-            activations_both = t.stack(
+            activations_model_0_dev = activations[0].to(self.device)
+            activations_model_1_dev = activations[1].to(self.device)
+            activations = t.stack(
                 [activations_model_0_dev, activations_model_1_dev], dim=1
             )
-            if return_list_of_games:
-                list_of_games = get_list_of_games_from_paired_activation_cache(
-                    val_dataset, indices
-                )
-                yield activations_both, list_of_games
+            if return_indices:
+                yield activations, indices.to(self.device)
             else:
-                yield activations_both
+                yield activations
 
     def compute_beta(
         self, model_i: int, device: t.device
@@ -207,14 +212,75 @@ class CrosscoderMetrics:
 
         return beta_r, beta_e
 
-    def compute_top_n_activations(
-        self, top_n: int
-    ) -> Float[Tensor, "n_features top_n"]:
+    def compute_top_n_activations(self, top_n: int) -> dict[int, list[list[int]]]:
         """
         Creates tensor that maps from feature j to the indicies of the top n activations of that feature.
-        The indices are for # TODO
+        Returns a dictionary mapping each feature index j of f_j to a list of subgames with highest f_j.
         """
-        pass
+        val_dataset, _ = self._get_val_data_set_and_dataloader()
+        dict_size = self.crosscoder.dict_size
+        # Very small default activation, such that we only take top_n, that are not 0 and otherwise keep -1 from default index.
+        top_n_feature_values = t.full(
+            (dict_size, top_n), 0.00001, device=self.device, dtype=t.float32
+        )  # [dict_size, top_n]
+        top_n_indices = t.full(
+            (dict_size, top_n), -1, device=self.device, dtype=t.long
+        )  # [dict_size, top_n]
+        cache_of_subgames_already_checked: set[tuple[int]] = set()
+        self.crosscoder.eval()
+        with t.no_grad():
+            for activations, indices in self._activations_both_generator(
+                "Find Top K activations", return_indices=True
+            ):  # activations: [batch_size, 2, d_model], indices=[batch_size]
+                # Filter out games we already checked so we dont get duplicates for top n activations
+                list_of_subgames = get_list_of_games_from_paired_activation_cache(
+                    val_dataset, indices.cpu()
+                )
+                unique_games = t.ones(len(indices), device=self.device, dtype=t.bool)
+                assert unique_games.numel() == len(list_of_subgames)
+                for index_in_indices, subgame in enumerate(list_of_subgames):
+                    if tuple(subgame) in cache_of_subgames_already_checked:
+                        unique_games[index_in_indices] = False
+                    else:
+                        cache_of_subgames_already_checked.add(tuple(subgame))
+                activations = activations[
+                    unique_games, :, :
+                ]  # [unique_batch_size, 2, d_model]
+                indices = indices[unique_games]  # [unique_batch_size]
+
+                # Take top n
+                f_j = self.crosscoder.get_activations(
+                    activations
+                )  # [unique_batch_size, dict_size]
+                f_j = f_j.transpose(0, 1)  # [dict_size, unique_batch_size]
+                combined_f_j = t.cat(
+                    (top_n_feature_values, f_j), dim=1
+                )  # [dict_size, top_n+unique_batch_size]
+                expanded_indices = indices.unsqueeze(0).expand(dict_size, -1)  #
+                combined_indices = t.cat(
+                    (top_n_indices, expanded_indices), dim=1
+                )  # [dict_size, top_n+unique_batch_size]
+                top_n_feature_values, indices_in_combined = t.topk(
+                    combined_f_j, k=top_n, dim=1, sorted=True
+                )  # [dict_size, top_n] and [dict_size, top_n]
+                top_n_indices = t.gather(
+                    combined_indices, dim=1, index=indices_in_combined
+                )  # [dict_size, top_n]
+
+        j_to_list_subgames: dict[int, list[list[int]]] = {}
+        for j in tqdm(range(dict_size), "Collecting list of subgames"):
+            indices_j = top_n_indices[j, :]  # [top_n]
+            valid_indices = indices_j[
+                indices_j != -1
+            ]  # In case less than n activations
+            if valid_indices.numel() > 0:
+                j_to_list_subgames[j] = get_list_of_games_from_paired_activation_cache(
+                    val_dataset, valid_indices.cpu()
+                )
+            else:
+                j_to_list_subgames[j] = []
+
+        return j_to_list_subgames
 
     def get_delta_thresholds(
         self, threshold_only: float = 0.1, threshold_shared: float = 0.1
