@@ -10,6 +10,7 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Any, Iterator
 import seaborn as sns
+from torch.nn.functional import softmax
 
 from dictionary_learning.dictionary_learning import CrossCoder
 from dictionary_learning.dictionary_learning.dictionary import BatchTopKCrossCoder
@@ -19,6 +20,8 @@ from wsg_games.utils import IndexedDataset, HistogramData
 from wsg_games.tictactoe.crosscoder.collect_activations import (
     get_list_of_games_from_paired_activation_cache,
 )
+import matplotlib.colors as mcolors
+from matplotlib.cm import ScalarMappable
 
 
 @dataclass
@@ -28,6 +31,8 @@ class CrosscoderMetrics:
     train_crosscoder_args: dict
     config: dict
     crosscoder: BatchTopKCrossCoder
+
+    # Unique / shared feature statistics
     delta_norms: Float[Tensor, "n_features"]
     beta_reconstruction_model_0: Float[Tensor, "n_features"]
     beta_reconstruction_model_1: Float[Tensor, "n_features"]
@@ -35,10 +40,18 @@ class CrosscoderMetrics:
     beta_error_model_1: Float[Tensor, "n_features"]
     nu_reconstruction: Float[Tensor, "n_features"]
     nu_error: Float[Tensor, "n_features"]
-    top_n_activations: dict[int, list[list[int]]]  # feature_index j -> list of subgames
     model_1_features: list[int]  # list of j
     model_2_features: list[int]
     shared_features: list[int]
+
+    # Top activations
+    top_n_activations: dict[int, list[list[int]]]  # feature_index j -> list of subgames
+    token_activation_frequency: Float[Tensor, "n_features"]
+    token_activation_topk_frequency: Float[Tensor, "n_features"]
+    hist_token_activation: HistogramData
+    hist_token_activation_topk: HistogramData
+    hist_f_j: HistogramData
+    hist_f_j_topk: HistogramData
 
     @classmethod
     def cache(cls, save_dir: str, device: t.device, overwrite: bool = False):
@@ -64,32 +77,34 @@ class CrosscoderMetrics:
 
         # Unique / shared feature statistics
         self.delta_norms = self.compute_delta_norms()
-        # self.plot_delta_norms()
-        # self.beta_reconstruction_model_0, self.beta_error_model_0 = self.compute_beta(
-        #     model_i=0, device=self.device
-        # )
-        # self.beta_reconstruction_model_1, self.beta_error_model_1 = self.compute_beta(
-        #     model_i=1, device=self.device
-        # )
-        # self.plot_betas()
-        # self.nu_reconstruction = (
-        #     self.beta_reconstruction_model_0 / self.beta_reconstruction_model_1
-        # )
-        # self.nu_error = self.beta_error_model_0 / self.beta_error_model_1
-        # self.plot_nu()
+        self.plot_delta_norms()
+        self.beta_reconstruction_model_0, self.beta_error_model_0 = self.compute_beta(
+            model_i=0, device=self.device
+        )
+        self.beta_reconstruction_model_1, self.beta_error_model_1 = self.compute_beta(
+            model_i=1, device=self.device
+        )
+        self.plot_betas()
+        self.nu_reconstruction = (
+            self.beta_reconstruction_model_0 / self.beta_reconstruction_model_1
+        )
+        self.nu_error = self.beta_error_model_0 / self.beta_error_model_1
+        self.plot_nu()
+        self.model_1_features, self.shared_features, self.model_2_features = (
+            self.classify_features()
+        )
 
         # Top activations
-        # self.top_n_activations = self.compute_top_n_activations(top_n=9)
+        self.top_n_activations = self.compute_top_n_activations(top_n=9)
         (
+            self.token_activation_frequency,
+            self.token_activation_topk_frequency,
             self.hist_token_activation,
             self.hist_token_activation_topk,
             self.hist_f_j,
             self.hist_f_j_topk,
         ) = self.compute_activation_histograms()
         self.plot_activation_histograms()
-        self.model_1_features, self.shared_features, self.model_2_features = (
-            self.classify_features()
-        )
 
         # Save
         print(f"New CrosscoderMetrics saved.")
@@ -98,24 +113,6 @@ class CrosscoderMetrics:
             pickle.dump(self, f)
 
     # Save + Load
-    def save(self, save_dir: str) -> None:
-        path = os.path.join(save_dir, "crosscoder_metric.pt")
-        with open(path, "wb") as f:
-            pickle.dump(self, f)
-
-    def _load_helper(path: str):
-        if os.path.exists(path):
-            with open(path, "rb") as f:
-                data = pickle.load(f)
-            return data
-        else:
-            raise FileNotFoundError(f"File {path} not found.")
-
-    @staticmethod
-    def load(save_dir: str):  # -> CrosscoderMetrics
-        path = os.path.join(save_dir, "crosscoder_metric.pt")
-        return CrosscoderMetrics._load_helper(path)
-
     @staticmethod
     def load_train_crosscoder_args(save_dir: str) -> dict:
         path = os.path.join(save_dir, "train_crosscoder_args.json")
@@ -275,6 +272,27 @@ class CrosscoderMetrics:
             threshold_shared_upper,
         )
 
+    def classify_features(self) -> tuple[list[int], list[int], list[int]]:
+        (
+            threshold_model_0_only,
+            threshold_model_1_only,
+            threshold_shared_lower,
+            threshold_shared_upper,
+        ) = self.get_delta_thresholds()
+
+        model_1_features = t.where(self.delta_norms <= threshold_model_0_only)[
+            0
+        ].tolist()
+        shared_features = t.where(
+            (self.delta_norms >= threshold_shared_lower)
+            & (self.delta_norms <= threshold_shared_upper)
+        )[0].tolist()
+        model_2_features = t.where(self.delta_norms >= threshold_model_1_only)[
+            0
+        ].tolist()
+
+        return model_1_features, shared_features, model_2_features
+
     def compute_top_n_activations(self, top_n: int) -> dict[int, list[list[int]]]:
         """
         Creates tensor that maps from feature j to the indicies of the top n activations of that feature.
@@ -348,7 +366,9 @@ class CrosscoderMetrics:
     def compute_activation_histograms(
         self,
         f_j_active_threshold_e: int = -5,
-    ) -> tuple[HistogramData, HistogramData, HistogramData, HistogramData]:
+    ) -> tuple[
+        t.tensor, t.tensor, HistogramData, HistogramData, HistogramData, HistogramData
+    ]:
         """
         Computes histograms over different activations.
         """
@@ -407,8 +427,9 @@ class CrosscoderMetrics:
 
         # hist_token_activation (Top-Left)
         bins_activations = np.linspace(0, 1, 101)
+        token_activation_frequency = token_activation_counts / total_tokens_processed
         counts_activations, _ = np.histogram(
-            (token_activation_counts / total_tokens_processed), bins=bins_activations
+            token_activation_frequency, bins=bins_activations
         )
         hist_token_activation = HistogramData(
             frequencies=counts_activations,
@@ -420,8 +441,11 @@ class CrosscoderMetrics:
         )
 
         # hist_token_activation_topk (Bottom-Left)
+        token_activation_topk_frequency = (
+            token_activation_topk_counts / total_tokens_processed
+        )
         counts_activations_topk, _ = np.histogram(
-            (token_activation_topk_counts / total_tokens_processed),
+            token_activation_topk_frequency,
             bins=bins_activations,
         )
         hist_token_activation_topk = HistogramData(
@@ -456,6 +480,8 @@ class CrosscoderMetrics:
         )
 
         return (
+            token_activation_frequency,
+            token_activation_topk_frequency,
             hist_token_activation,
             hist_token_activation_topk,
             hist_f_j,
@@ -718,26 +744,111 @@ class CrosscoderMetrics:
 
         return fig
 
-    def classify_features(self) -> tuple[list[int], list[int], list[int]]:
-        (
-            threshold_model_0_only,
-            threshold_model_1_only,
-            threshold_shared_lower,
-            threshold_shared_upper,
-        ) = self.get_delta_thresholds()
 
-        model_1_features = t.where(self.delta_norms <= threshold_model_0_only)[
-            0
-        ].tolist()
-        shared_features = t.where(
-            (self.delta_norms >= threshold_shared_lower)
-            & (self.delta_norms <= threshold_shared_upper)
-        )[0].tolist()
-        model_2_features = t.where(self.delta_norms >= threshold_model_1_only)[
-            0
-        ].tolist()
+def display_feature_information(
+    self: CrosscoderMetrics,
+    feature_index_j: int,
+    weak_model,
+    strong_model,
+    finetuned_model,
+) -> plt.Figure:
+    print("token_activation_frequency: ", self.token_activation_frequency)
+    print("token_activation_topk_frequency: ", self.token_activation_topk_frequency)
 
-        return model_1_features, shared_features, model_2_features
+    if feature_index_j in self.model_1_features:
+        category = "Model 1"
+    elif feature_index_j in self.model_2_features:
+        category = "Model 2"
+    elif feature_index_j in self.shared_features:
+        category = "Shared"
+    else:
+        category = "None"
 
-    def display_feature_information(feature_index_j: int) -> plt.Figure:
-        pass
+    top_n_subgames = self.top_n_activations[feature_index_j]
+    print(f"{len(top_n_subgames)} many subgames.")
+    if len(top_n_subgames) == 0:
+        print("No top n games, so no plot.")
+        fig, ax = plt.subplots()
+        ax.text(
+            0.5,
+            0.5,
+            f"No top activating games found for feature {feature_index_j}",
+            ha="center",
+            va="center",
+        )
+        return fig
+
+    # Get predictions
+    top_n_subgames_weak_model = []
+    top_n_subgames_strong_model = []
+    top_n_subgames_finetuned_model = []
+    for game in top_n_subgames:
+        game = t.tensor(game)
+        # game: [n_moves]
+        # softmax(weak_model(game), dim=-1): [n_moves, n_tokens]
+        # we append [n_tokens], i.e. the predictions at the last token
+        top_n_subgames_weak_model.append(softmax(weak_model(game), dim=-1)[-1, :])
+        top_n_subgames_strong_model.append(softmax(strong_model(game), dim=-1)[-1, :])
+        top_n_subgames_finetuned_model.append(
+            softmax(finetuned_model(game), dim=-1)[-1, :]
+        )
+
+    # Plot
+    n_games = len(top_n_subgames)
+    fig, axes = plt.subplots(n_games, 3, figsize=(12, 4 * n_games))
+    if n_games == 1:
+        axes = np.expand_dims(axes, 0)
+    for i, game in enumerate(top_n_subgames):
+        # Board satte
+        board = [""] * 9
+        current_player = "X"
+        for move in game:
+            if move < 9:
+                board[move] = current_player
+                current_player = "O" if current_player == "X" else "X"
+        current_state = board
+
+        # Predictions of models
+        distributions = [
+            top_n_subgames_weak_model[i],
+            top_n_subgames_strong_model[i],
+            top_n_subgames_finetuned_model[i],
+        ]
+        titles = ["Weak Model", "Strong Model", "Finetuned Model"]
+
+        # Plot for each model the predictions
+        for j, (dist, title_prefix) in enumerate(zip(distributions, titles)):
+            ax = axes[i, j]
+            dist = dist.detach().cpu().numpy().flatten()
+            board_grid = dist[:9].reshape(3, 3)
+            end_game_prob = dist[9]
+
+            # Color map of probabilities
+            ax.imshow(board_grid, vmin=0, vmax=1, cmap="viridis")
+            ax.set_title(f"{title_prefix} (End-of-game: {end_game_prob:.2f})")
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+            # Write existing 'X's and 'O's on the board
+            for pos, symbol in enumerate(current_state):
+                if symbol:  # if the cell is occupied
+                    row, col = divmod(pos, 3)
+                    ax.text(
+                        col,
+                        row,
+                        symbol,
+                        ha="center",
+                        va="center",
+                        fontsize=16,
+                        color="white",
+                    )
+
+    # Single colorbar
+    norm = mcolors.Normalize(vmin=0, vmax=1)
+    sm = ScalarMappable(norm=norm, cmap="viridis")
+    sm.set_array([])
+    cbar_ax = fig.add_axes([0.95, 0.15, 0.03, 0.7])
+    fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
+    fig.tight_layout(rect=[0, 0, 0.93, 1])
+
+    return fig
