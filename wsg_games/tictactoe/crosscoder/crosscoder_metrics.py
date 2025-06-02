@@ -35,7 +35,25 @@ class CrosscoderMetrics:
     beta_error_model_1: Float[Tensor, "n_features"]
     nu_reconstruction: Float[Tensor, "n_features"]
     nu_error: Float[Tensor, "n_features"]
-    top_n_activations: dict[int, list[list[int]]]  # feature_index -> list of subgames
+    top_n_activations: dict[int, list[list[int]]]  # feature_index j -> list of subgames
+    model_1_features: list[int]  # list of j
+    model_2_features: list[int]
+    shared_features: list[int]
+
+    @classmethod
+    def cache(cls, save_dir: str, device: t.device, overwrite: bool = False):
+        """
+        Factory method to load a CrosscoderMetrics from a file or create a new one.
+        """
+        save_path = os.path.join(save_dir, "crosscoder_metrics.pkl")
+        if os.path.exists(save_path) and not overwrite:
+            print(f"Loading CrosscoderMetrics from {save_path}...")
+            with open(save_path, "rb") as f:
+                return pickle.load(f)
+        else:
+            print(f"File not found. Creating new CrosscoderMetrics ...")
+            # Call the standard __init__ to create the new instance
+            return cls(save_dir, device)
 
     def __init__(self, save_dir: str, device: t.device) -> None:
         self.save_dir = save_dir
@@ -43,7 +61,9 @@ class CrosscoderMetrics:
         self.train_crosscoder_args = self.load_train_crosscoder_args(save_dir)
         self.config = self.load_config(self.save_dir)
         self.crosscoder = self.load_model(self.save_dir, device)
-        # self.delta_norms = self.compute_delta_norms()
+
+        # Unique / shared feature statistics
+        self.delta_norms = self.compute_delta_norms()
         # self.plot_delta_norms()
         # self.beta_reconstruction_model_0, self.beta_error_model_0 = self.compute_beta(
         #     model_i=0, device=self.device
@@ -57,6 +77,8 @@ class CrosscoderMetrics:
         # )
         # self.nu_error = self.beta_error_model_0 / self.beta_error_model_1
         # self.plot_nu()
+
+        # Top activations
         # self.top_n_activations = self.compute_top_n_activations(top_n=9)
         (
             self.hist_token_activation,
@@ -65,6 +87,15 @@ class CrosscoderMetrics:
             self.hist_f_j_topk,
         ) = self.compute_activation_histograms()
         self.plot_activation_histograms()
+        self.model_1_features, self.shared_features, self.model_2_features = (
+            self.classify_features()
+        )
+
+        # Save
+        print(f"New CrosscoderMetrics saved.")
+        save_path = os.path.join(self.save_dir, "crosscoder_metrics.pkl")
+        with open(save_path, "wb") as f:
+            pickle.dump(self, f)
 
     # Save + Load
     def save(self, save_dir: str) -> None:
@@ -540,7 +571,7 @@ class CrosscoderMetrics:
         # plt.show() # Uncomment to display
         return fig, axes
 
-    def plot_nu(self):
+    def plot_nu(self) -> plt.Figure:
         """
         Plots nu_error vs nu_reconstruction, colored by delta_norm categories,
         Same as in https://arxiv.org/pdf/2504.02922
@@ -686,3 +717,27 @@ class CrosscoderMetrics:
                 print(f"Error saving plot: {e}")
 
         return fig
+
+    def classify_features(self) -> tuple[list[int], list[int], list[int]]:
+        (
+            threshold_model_0_only,
+            threshold_model_1_only,
+            threshold_shared_lower,
+            threshold_shared_upper,
+        ) = self.get_delta_thresholds()
+
+        model_1_features = t.where(self.delta_norms <= threshold_model_0_only)[
+            0
+        ].tolist()
+        shared_features = t.where(
+            (self.delta_norms >= threshold_shared_lower)
+            & (self.delta_norms <= threshold_shared_upper)
+        )[0].tolist()
+        model_2_features = t.where(self.delta_norms >= threshold_model_1_only)[
+            0
+        ].tolist()
+
+        return model_1_features, shared_features, model_2_features
+
+    def display_feature_information(feature_index_j: int) -> plt.Figure:
+        pass
