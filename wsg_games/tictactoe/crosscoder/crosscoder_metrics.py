@@ -752,8 +752,13 @@ def display_feature_information(
     strong_model,
     finetuned_model,
 ) -> plt.Figure:
-    print("token_activation_frequency: ", self.token_activation_frequency)
-    print("token_activation_topk_frequency: ", self.token_activation_topk_frequency)
+    print(
+        "token_activation_frequency: ", self.token_activation_frequency[feature_index_j]
+    )
+    print(
+        "token_activation_topk_frequency: ",
+        self.token_activation_topk_frequency[feature_index_j],
+    )
 
     if feature_index_j in self.model_1_features:
         category = "Model 1"
@@ -763,6 +768,7 @@ def display_feature_information(
         category = "Shared"
     else:
         category = "None"
+    print("category: ", category)
 
     top_n_subgames = self.top_n_activations[feature_index_j]
     print(f"{len(top_n_subgames)} many subgames.")
@@ -787,10 +793,12 @@ def display_feature_information(
         # game: [n_moves]
         # softmax(weak_model(game), dim=-1): [n_moves, n_tokens]
         # we append [n_tokens], i.e. the predictions at the last token
-        top_n_subgames_weak_model.append(softmax(weak_model(game), dim=-1)[-1, :])
-        top_n_subgames_strong_model.append(softmax(strong_model(game), dim=-1)[-1, :])
+        top_n_subgames_weak_model.append(softmax(weak_model(game), dim=-1)[:, -1, :])
+        top_n_subgames_strong_model.append(
+            softmax(strong_model(game), dim=-1)[:, -1, :]
+        )
         top_n_subgames_finetuned_model.append(
-            softmax(finetuned_model(game), dim=-1)[-1, :]
+            softmax(finetuned_model(game), dim=-1)[:, -1, :]
         )
 
     # Plot
