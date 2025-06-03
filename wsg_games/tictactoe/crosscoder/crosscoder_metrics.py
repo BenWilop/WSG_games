@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Iterator
 import seaborn as sns
 from torch.nn.functional import softmax
+import math
 
 from dictionary_learning.dictionary_learning import CrossCoder
 from dictionary_learning.dictionary_learning.dictionary import BatchTopKCrossCoder
@@ -22,6 +23,7 @@ from wsg_games.tictactoe.crosscoder.collect_activations import (
 )
 import matplotlib.colors as mcolors
 from matplotlib.cm import ScalarMappable
+from matplotlib.lines import Line2D
 
 
 @dataclass
@@ -799,11 +801,14 @@ class CrosscoderMetrics:
         self.model_predictions_on_topn = model_predictions_on_topn  # TODO move to init, but then we need models there
         return model_predictions_on_topn
 
-    def display_feature_information(self, feature_index_j: int) -> plt.Figure:
+    def display_feature_information(
+        self, feature_index_j: int, plot_strong_model: bool = False
+    ) -> plt.Figure:
         """
-        Displays the pre-computed information for a single feature.
+        Displays the pre-computed information for a single feature,
+        with a conditional layout for plotting 2 or 3 models.
         """
-        # Determine Category
+        # 1. Determine Category and Plot Title
         if feature_index_j in self.model_1_features:
             category = "Model 1 Only"
         elif feature_index_j in self.model_2_features:
@@ -813,11 +818,10 @@ class CrosscoderMetrics:
         else:
             category = "Unclassified"
 
-        # Prepare plot info
         activation_freq = self.token_activation_frequency[feature_index_j]
         info_string = f"Feature {feature_index_j} | Category: {category} | Activation Freq: {activation_freq:.4f}"
 
-        # Get pre-computed data
+        # 2. Get pre-computed data
         top_n_subgames = self.top_n_activations.get(feature_index_j, [])
         predictions = self.model_predictions_on_topn.get(feature_index_j)
 
@@ -834,59 +838,196 @@ class CrosscoderMetrics:
             fig.suptitle(info_string)
             return fig
 
-        # Plotting
+        # 3. Conditionally select models and titles
+        all_distributions = [
+            predictions["weak"],
+            predictions["strong"],
+            predictions["finetuned"],
+        ]
+        all_titles = ["Weak Model", "Strong Model", "Finetuned Model"]
+
+        if plot_strong_model:
+            distributions_to_plot = [
+                (d[i] for d in all_distributions) for i in range(len(top_n_subgames))
+            ]
+            titles_to_plot = all_titles
+        else:
+            distributions_to_plot = [
+                (all_distributions[0][i], all_distributions[2][i])
+                for i in range(len(top_n_subgames))
+            ]
+            titles_to_plot = [all_titles[0], all_titles[2]]
+
         n_games = len(top_n_subgames)
-        fig, axes = plt.subplots(n_games, 3, figsize=(12, 4 * n_games), squeeze=False)
+
+        # =========================================================================
+        # START OF CONDITIONAL LAYOUT LOGIC
+        # =========================================================================
+
+        if plot_strong_model:
+            # --- LAYOUT 1: 3 Models, 2 side-by-side game groups (UNCHANGED) ---
+            n_models_per_group = 3
+            n_plot_rows = math.ceil(n_games / 2)
+            n_plot_cols = 2 * n_models_per_group
+
+            fig, axes = plt.subplots(
+                n_plot_rows,
+                n_plot_cols,
+                figsize=(n_plot_cols * 2.5, n_plot_rows * 2.7),
+                squeeze=False,
+            )
+            line = Line2D(
+                [0.5, 0.5],
+                [0.12, 0.94],
+                transform=fig.transFigure,
+                color="grey",
+                linestyle="--",
+                linewidth=1.5,
+            )
+            fig.add_artist(line)
+
+            for i, game in enumerate(top_n_subgames):
+                plot_row, col_offset = i // 2, (i % 2) * n_models_per_group
+                # ... (plotting logic is the same)
+                board = [""] * 9
+                current_player = "X"
+                for move in game:
+                    if move < 9:
+                        board[move] = current_player
+                        current_player = "O" if current_player == "X" else "X"
+                for j, (dist, title) in enumerate(
+                    zip(distributions_to_plot[i], titles_to_plot)
+                ):
+                    ax = axes[plot_row, col_offset + j]
+                    dist_np = dist.numpy().flatten()
+                    board_grid = dist_np[:9].reshape(3, 3)
+                    end_game_prob = dist_np[9] if len(dist_np) > 9 else 0.0
+                    ax.imshow(board_grid, vmin=0, vmax=1, cmap="viridis")
+                    ax.set_title(
+                        f"{title}\n(End-game: {end_game_prob:.2f})", fontsize=10
+                    )
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+                    for pos, symbol in enumerate(board):
+                        if symbol:
+                            row, col = divmod(pos, 3)
+                            ax.text(
+                                col,
+                                row,
+                                symbol,
+                                ha="center",
+                                va="center",
+                                fontsize=16,
+                                color="white",
+                            )
+
+            if n_games % 2 != 0:
+                for j in range(n_models_per_group, n_plot_cols):
+                    axes[n_plot_rows - 1, j].set_axis_off()
+
+        else:
+            # --- LAYOUT 2: 2 Models, 6 games per visual row (NEWLY CORRECTED) ---
+            n_models_per_game = 2
+            n_games_per_row = 6
+
+            n_plot_rows = math.ceil(n_games / n_games_per_row) * n_models_per_game
+            n_plot_cols = n_games_per_row
+
+            fig, axes = plt.subplots(
+                n_plot_rows,
+                n_plot_cols,
+                figsize=(n_plot_cols * 2.5, n_plot_rows * 2.8),
+                squeeze=False,
+            )
+            # Add two vertical separator lines to create 3 groups of 2 games
+            line1 = Line2D(
+                [1 / 3, 1 / 3],
+                [0.1, 0.94],
+                transform=fig.transFigure,
+                color="grey",
+                linestyle="--",
+                linewidth=1.5,
+            )
+            line2 = Line2D(
+                [2 / 3, 2 / 3],
+                [0.1, 0.94],
+                transform=fig.transFigure,
+                color="grey",
+                linestyle="--",
+                linewidth=1.5,
+            )
+            fig.add_artist(line1)
+            fig.add_artist(line2)
+
+            # Plotting loop for the 6-game-wide layout
+            for i, game in enumerate(top_n_subgames):
+                game_grid_row = i // n_games_per_row
+                game_grid_col = i % n_games_per_row
+                start_plot_row = game_grid_row * n_models_per_game
+
+                for j, (dist, title) in enumerate(
+                    zip(distributions_to_plot[i], titles_to_plot)
+                ):
+                    ax = axes[start_plot_row + j, game_grid_col]
+                    # ... (plotting logic is the same)
+                    board = [""] * 9
+                    current_player = "X"
+                    for move in game:
+                        if move < 9:
+                            board[move] = current_player
+                            current_player = "O" if current_player == "X" else "X"
+                    dist_np = dist.numpy().flatten()
+                    board_grid = dist_np[:9].reshape(3, 3)
+                    end_game_prob = dist_np[9] if len(dist_np) > 9 else 0.0
+                    ax.imshow(board_grid, vmin=0, vmax=1, cmap="viridis")
+
+                    # Set titles and labels
+                    if j == 0:
+                        ax.set_title(
+                            f"Game {i + 1}\n(End-game: {end_game_prob:.2f})",
+                            fontsize=10,
+                        )
+                    else:
+                        ax.set_title(f"(End-game: {end_game_prob:.2f})", fontsize=10)
+                    ax.set_ylabel(title, fontsize=10, labelpad=10)
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+
+                    for pos, symbol in enumerate(board):
+                        if symbol:
+                            row, col = divmod(pos, 3)
+                            ax.text(
+                                col,
+                                row,
+                                symbol,
+                                ha="center",
+                                va="center",
+                                fontsize=16,
+                                color="white",
+                            )
+
+            # Hide any unused axes in the grid
+            total_game_slots = math.ceil(n_games / n_games_per_row) * n_games_per_row
+            for i in range(n_games, total_game_slots):
+                game_grid_col = i % n_games_per_row
+                game_grid_row = i // n_games_per_row
+                start_plot_row = game_grid_row * n_models_per_game
+                for j in range(n_models_per_game):
+                    axes[start_plot_row + j, game_grid_col].set_axis_off()
+
+        # =========================================================================
+        # SHARED FINALIZATION CODE
+        # =========================================================================
+
         fig.suptitle(info_string, fontsize=16)
 
-        for i, game in enumerate(top_n_subgames):
-            # Board state
-            board = [""] * 9
-            current_player = "X"
-            for move in game:
-                if move < 9:
-                    board[move] = current_player
-                    current_player = "O" if current_player == "X" else "X"
-
-            # Model Predictions
-            distributions = [
-                predictions["weak"][i],
-                predictions["strong"][i],
-                predictions["finetuned"][i],
-            ]
-            titles = ["Weak Model", "Strong Model", "Finetuned Model"]
-
-            for j, (dist, title_prefix) in enumerate(zip(distributions, titles)):
-                ax = axes[i, j]
-                dist_np = dist.numpy().flatten()
-                board_grid = dist_np[:9].reshape(3, 3)
-                end_game_prob = dist_np[9] if len(dist_np) > 9 else 0.0
-
-                ax.imshow(board_grid, vmin=0, vmax=1, cmap="viridis")
-                ax.set_title(f"{title_prefix}\n(End-game: {end_game_prob:.2f})")
-                ax.set_xticks([])
-                ax.set_yticks([])
-
-                for pos, symbol in enumerate(board):
-                    if symbol:
-                        row, col = divmod(pos, 3)
-                        ax.text(
-                            col,
-                            row,
-                            symbol,
-                            ha="center",
-                            va="center",
-                            fontsize=16,
-                            color="white",
-                        )
-
-        # Add a single, shared colorbar
+        cbar_ax = fig.add_axes([0.25, 0.04, 0.5, 0.025])
         norm = mcolors.Normalize(vmin=0, vmax=1)
         sm = ScalarMappable(norm=norm, cmap="viridis")
-        cbar_ax = fig.add_axes([0.95, 0.15, 0.03, 0.7])
-        fig.colorbar(sm, cax=cbar_ax)
-        fig.tight_layout(
-            rect=[0, 0, 0.93, 0.95]
-        )  # Adjust rect to make space for suptitle
+        fig.colorbar(
+            sm, cax=cbar_ax, orientation="horizontal", label="Next Move Probability"
+        )
+
+        fig.tight_layout(rect=[0, 0.08, 1, 0.94])
 
         return fig

@@ -4,6 +4,7 @@ import ipywidgets as widgets
 from IPython.display import display, clear_output
 import numpy as np
 from wsg_games.tictactoe.crosscoder.crosscoder_metrics import CrosscoderMetrics
+import matplotlib.pyplot as plt
 
 
 class CrosscoderFeatureExplorer:
