@@ -806,7 +806,7 @@ class CrosscoderMetrics:
     ) -> plt.Figure:
         """
         Displays the pre-computed information for a single feature,
-        with a conditional layout for plotting 2 or 3 models.
+        with first moves highlighted in red.
         """
         # 1. Determine Category and Plot Title
         if feature_index_j in self.model_1_features:
@@ -865,7 +865,7 @@ class CrosscoderMetrics:
         # =========================================================================
 
         if plot_strong_model:
-            # --- LAYOUT 1: 3 Models, 2 side-by-side game groups (UNCHANGED) ---
+            # --- LAYOUT 1: 3 Models, 2 side-by-side game groups ---
             n_models_per_group = 3
             n_plot_rows = math.ceil(n_games / 2)
             n_plot_cols = 2 * n_models_per_group
@@ -888,13 +888,17 @@ class CrosscoderMetrics:
 
             for i, game in enumerate(top_n_subgames):
                 plot_row, col_offset = i // 2, (i % 2) * n_models_per_group
-                # ... (plotting logic is the same)
+
                 board = [""] * 9
                 current_player = "X"
                 for move in game:
                     if move < 9:
                         board[move] = current_player
                         current_player = "O" if current_player == "X" else "X"
+
+                first_x_move = game[1] if len(game) > 1 else -1
+                first_o_move = game[2] if len(game) > 2 else -1
+
                 for j, (dist, title) in enumerate(
                     zip(distributions_to_plot[i], titles_to_plot)
                 ):
@@ -908,8 +912,15 @@ class CrosscoderMetrics:
                     )
                     ax.set_xticks([])
                     ax.set_yticks([])
+
+                    # Render symbols with conditional color
                     for pos, symbol in enumerate(board):
                         if symbol:
+                            is_first_move = (pos == first_x_move) or (
+                                pos == first_o_move
+                            )
+                            # CHANGE: Determine color instead of font weight
+                            text_color = "red" if is_first_move else "white"
                             row, col = divmod(pos, 3)
                             ax.text(
                                 col,
@@ -918,7 +929,8 @@ class CrosscoderMetrics:
                                 ha="center",
                                 va="center",
                                 fontsize=16,
-                                color="white",
+                                color=text_color,
+                                fontweight="normal",
                             )
 
             if n_games % 2 != 0:
@@ -926,20 +938,19 @@ class CrosscoderMetrics:
                     axes[n_plot_rows - 1, j].set_axis_off()
 
         else:
-            # --- LAYOUT 2: 2 Models, 6 games per visual row (NEWLY CORRECTED) ---
+            # --- LAYOUT 2: 2 Models side-by-side, 3 games per row ---
             n_models_per_game = 2
-            n_games_per_row = 6
+            n_games_per_row = 3
 
-            n_plot_rows = math.ceil(n_games / n_games_per_row) * n_models_per_game
-            n_plot_cols = n_games_per_row
+            n_plot_rows = math.ceil(n_games / n_games_per_row)
+            n_plot_cols = n_games_per_row * n_models_per_game
 
             fig, axes = plt.subplots(
                 n_plot_rows,
                 n_plot_cols,
-                figsize=(n_plot_cols * 2.5, n_plot_rows * 2.8),
+                figsize=(n_plot_cols * 2.2, n_plot_rows * 3),
                 squeeze=False,
             )
-            # Add two vertical separator lines to create 3 groups of 2 games
             line1 = Line2D(
                 [1 / 3, 1 / 3],
                 [0.1, 0.94],
@@ -959,42 +970,46 @@ class CrosscoderMetrics:
             fig.add_artist(line1)
             fig.add_artist(line2)
 
-            # Plotting loop for the 6-game-wide layout
             for i, game in enumerate(top_n_subgames):
-                game_grid_row = i // n_games_per_row
-                game_grid_col = i % n_games_per_row
-                start_plot_row = game_grid_row * n_models_per_game
+                target_plot_row = i // n_games_per_row
+                start_plot_col = (i % n_games_per_row) * n_models_per_game
+
+                board = [""] * 9
+                current_player = "X"
+                for move in game:
+                    if move < 9:
+                        board[move] = current_player
+                        current_player = "O" if current_player == "X" else "X"
+
+                first_x_move = game[1] if len(game) > 1 else -1
+                first_o_move = game[2] if len(game) > 2 else -1
 
                 for j, (dist, title) in enumerate(
                     zip(distributions_to_plot[i], titles_to_plot)
                 ):
-                    ax = axes[start_plot_row + j, game_grid_col]
-                    # ... (plotting logic is the same)
-                    board = [""] * 9
-                    current_player = "X"
-                    for move in game:
-                        if move < 9:
-                            board[move] = current_player
-                            current_player = "O" if current_player == "X" else "X"
+                    ax = axes[target_plot_row, start_plot_col + j]
                     dist_np = dist.numpy().flatten()
                     board_grid = dist_np[:9].reshape(3, 3)
                     end_game_prob = dist_np[9] if len(dist_np) > 9 else 0.0
                     ax.imshow(board_grid, vmin=0, vmax=1, cmap="viridis")
 
-                    # Set titles and labels
-                    if j == 0:
-                        ax.set_title(
-                            f"Game {i + 1}\n(End-game: {end_game_prob:.2f})",
-                            fontsize=10,
-                        )
-                    else:
-                        ax.set_title(f"(End-game: {end_game_prob:.2f})", fontsize=10)
-                    ax.set_ylabel(title, fontsize=10, labelpad=10)
+                    full_title = f"Game {i + 1} - {title}" if j == 0 else title
+                    ax.set_title(
+                        f"{full_title}\n(End-game: {end_game_prob:.2f})", fontsize=10
+                    )
                     ax.set_xticks([])
                     ax.set_yticks([])
+                    if j == 0:
+                        ax.set_ylabel(f"Game Set {target_plot_row + 1}", labelpad=15)
 
+                    # Render symbols with conditional color
                     for pos, symbol in enumerate(board):
                         if symbol:
+                            is_first_move = (pos == first_x_move) or (
+                                pos == first_o_move
+                            )
+                            # CHANGE: Determine color instead of font weight
+                            text_color = "red" if is_first_move else "white"
                             row, col = divmod(pos, 3)
                             ax.text(
                                 col,
@@ -1003,17 +1018,20 @@ class CrosscoderMetrics:
                                 ha="center",
                                 va="center",
                                 fontsize=16,
-                                color="white",
+                                color=text_color,
+                                fontweight="normal",
                             )
 
-            # Hide any unused axes in the grid
-            total_game_slots = math.ceil(n_games / n_games_per_row) * n_games_per_row
+            total_game_slots = n_plot_rows * n_games_per_row
             for i in range(n_games, total_game_slots):
-                game_grid_col = i % n_games_per_row
-                game_grid_row = i // n_games_per_row
-                start_plot_row = game_grid_row * n_models_per_game
+                target_plot_row = i // n_games_per_row
+                start_plot_col = (i % n_games_per_row) * n_models_per_game
                 for j in range(n_models_per_game):
-                    axes[start_plot_row + j, game_grid_col].set_axis_off()
+                    if (
+                        target_plot_row < axes.shape[0]
+                        and (start_plot_col + j) < axes.shape[1]
+                    ):
+                        axes[target_plot_row, start_plot_col + j].set_axis_off()
 
         # =========================================================================
         # SHARED FINALIZATION CODE

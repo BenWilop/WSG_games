@@ -15,6 +15,18 @@ from dictionary_learning.dictionary_learning.trainers.crosscoder import (
 )
 
 
+def get_training_cfg_cross_coder():
+    training_cfg_cross_coder = {
+        "learning_rate": 1e-3,
+        "max_steps": 20000,
+        "validate_every_n_steps": 1000,
+        "batch_size": 64,
+        "expansion_factor": 4,  # 32 in https://arxiv.org/pdf/2504.02922?
+        "k": 10,
+    }
+    return training_cfg_cross_coder
+
+
 def multi_epoch_dataloader_iterator(
     dataloader: DataLoader, total_steps_to_yield: int
 ) -> Iterator[Any]:
@@ -48,18 +60,6 @@ def multi_epoch_dataloader_iterator(
         if num_batches_this_epoch == 0 and steps_yielded < total_steps_to_yield:
             print("Warning: DataLoader became empty before all steps were yielded.")
             return
-
-
-def get_training_cfg_cross_coder():
-    training_cfg_cross_coder = {
-        "learning_rate": 1e-3,
-        "max_steps": 20000,
-        "validate_every_n_steps": 1000,
-        "batch_size": 64,
-        "expansion_factor": 32,
-        "k": 10,
-    }
-    return training_cfg_cross_coder
 
 
 def train_crosscoder(
