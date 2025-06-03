@@ -744,119 +744,149 @@ class CrosscoderMetrics:
 
         return fig
 
-
-def display_feature_information(
-    self: CrosscoderMetrics,
-    feature_index_j: int,
-    weak_model,
-    strong_model,
-    finetuned_model,
-) -> plt.Figure:
-    print(
-        "token_activation_frequency: ", self.token_activation_frequency[feature_index_j]
-    )
-    print(
-        "token_activation_topk_frequency: ",
-        self.token_activation_topk_frequency[feature_index_j],
-    )
-
-    if feature_index_j in self.model_1_features:
-        category = "Model 1"
-    elif feature_index_j in self.model_2_features:
-        category = "Model 2"
-    elif feature_index_j in self.shared_features:
-        category = "Shared"
-    else:
-        category = "None"
-    print("category: ", category)
-
-    top_n_subgames = self.top_n_activations[feature_index_j]
-    print(f"{len(top_n_subgames)} many subgames.")
-    if len(top_n_subgames) == 0:
-        print("No top n games, so no plot.")
-        fig, ax = plt.subplots()
-        ax.text(
-            0.5,
-            0.5,
-            f"No top activating games found for feature {feature_index_j}",
-            ha="center",
-            va="center",
-        )
-        return fig
-
-    # Get predictions
-    top_n_subgames_weak_model = []
-    top_n_subgames_strong_model = []
-    top_n_subgames_finetuned_model = []
-    for game in top_n_subgames:
-        game = t.tensor(game)
-        game: [n_moves]
-        # softmax(weak_model(game), dim=-1): [n_moves, n_tokens]
-        # we append [n_tokens], i.e. the predictions at the last token
-        top_n_subgames_weak_model.append(softmax(weak_model(game), dim=-1)[:, -1, :])
-        top_n_subgames_strong_model.append(
-            softmax(strong_model(game), dim=-1)[:, -1, :]
-        )
-        top_n_subgames_finetuned_model.append(
-            softmax(finetuned_model(game), dim=-1)[:, -1, :]
+    def _get_or_compute_model_predictions(
+        self, weak_model, strong_model, finetuned_model
+    ) -> dict:
+        """
+        Loads pre-computed model predictions from a cache file if it exists.
+        Otherwise, computes them for all features and saves them to the file.
+        """
+        cache_path = os.path.join(
+            self.save_dir, "crosscoder_metrics_model_predictions.pkl"
         )
 
-    # Plot
-    n_games = len(top_n_subgames)
-    fig, axes = plt.subplots(n_games, 3, figsize=(12, 4 * n_games))
-    if n_games == 1:
-        axes = np.expand_dims(axes, 0)
-    for i, game in enumerate(top_n_subgames):
-        # Board satte
-        board = [""] * 9
-        current_player = "X"
-        for move in game:
-            if move < 9:
-                board[move] = current_player
-                current_player = "O" if current_player == "X" else "X"
-        current_state = board
+        if os.path.exists(cache_path):
+            print(f"Loading model predictions from {cache_path}...")
+            with open(cache_path, "rb") as f:
+                model_predictions_on_topn = pickle.load(f)
+                self.model_predictions_on_topn = model_predictions_on_topn  # TODO move to init, but then we need models there
+                return model_predictions_on_topn
 
-        # Predictions of models
-        distributions = [
-            top_n_subgames_weak_model[i],
-            top_n_subgames_strong_model[i],
-            top_n_subgames_finetuned_model[i],
-        ]
-        titles = ["Weak Model", "Strong Model", "Finetuned Model"]
+        print(
+            "Pre-computing model predictions for all features. This may take a while..."
+        )
 
-        # Plot for each model the predictions
-        for j, (dist, title_prefix) in enumerate(zip(distributions, titles)):
-            ax = axes[i, j]
-            dist = dist.detach().cpu().numpy().flatten()
-            board_grid = dist[:9].reshape(3, 3)
-            end_game_prob = dist[9]
+        model_predictions_on_topn = {}
+        for j in tqdm(
+            range(self.crosscoder.dict_size), desc="Pre-computing predictions"
+        ):
+            subgames = self.top_n_activations.get(j, [])
+            if not subgames:
+                continue
 
-            # Color map of probabilities
-            ax.imshow(board_grid, vmin=0, vmax=1, cmap="viridis")
-            ax.set_title(f"{title_prefix} (End-of-game: {end_game_prob:.2f})")
-            ax.set_xticks([])
-            ax.set_yticks([])
-
-            # Write existing 'X's and 'O's on the board
-            for pos, symbol in enumerate(current_state):
-                if symbol:  # if the cell is occupied
-                    row, col = divmod(pos, 3)
-                    ax.text(
-                        col,
-                        row,
-                        symbol,
-                        ha="center",
-                        va="center",
-                        fontsize=16,
-                        color="white",
+            predictions = {"weak": [], "strong": [], "finetuned": []}
+            with t.no_grad():
+                for game in subgames:
+                    game_tensor = t.tensor(game, device=self.device).unsqueeze(0)
+                    # game: [n_moves]
+                    # softmax(weak_model(game), dim=-1): [n_moves, n_tokens]
+                    # we append [n_tokens], i.e. the predictions at the last token
+                    predictions["weak"].append(
+                        softmax(weak_model(game_tensor), dim=-1)[:, -1, :].cpu()
                     )
+                    predictions["strong"].append(
+                        softmax(strong_model(game_tensor), dim=-1)[:, -1, :].cpu()
+                    )
+                    predictions["finetuned"].append(
+                        softmax(finetuned_model(game_tensor), dim=-1)[:, -1, :].cpu()
+                    )
+            model_predictions_on_topn[j] = predictions
 
-    # Single colorbar
-    norm = mcolors.Normalize(vmin=0, vmax=1)
-    sm = ScalarMappable(norm=norm, cmap="viridis")
-    sm.set_array([])
-    cbar_ax = fig.add_axes([0.95, 0.15, 0.03, 0.7])
-    fig.colorbar(sm, cax=cbar_ax, orientation="vertical")
-    fig.tight_layout(rect=[0, 0, 0.93, 1])
+        print(f"Saving computed predictions to {cache_path}...")
+        with open(cache_path, "wb") as f:
+            pickle.dump(model_predictions_on_topn, f)
 
-    return fig
+        self.model_predictions_on_topn = model_predictions_on_topn  # TODO move to init, but then we need models there
+        return model_predictions_on_topn
+
+    def display_feature_information(self, feature_index_j: int) -> plt.Figure:
+        """
+        Displays the pre-computed information for a single feature.
+        """
+        # Determine Category
+        if feature_index_j in self.model_1_features:
+            category = "Model 1 Only"
+        elif feature_index_j in self.model_2_features:
+            category = "Model 2 Only"
+        elif feature_index_j in self.shared_features:
+            category = "Shared"
+        else:
+            category = "Unclassified"
+
+        # Prepare plot info
+        activation_freq = self.token_activation_frequency[feature_index_j]
+        info_string = f"Feature {feature_index_j} | Category: {category} | Activation Freq: {activation_freq:.4f}"
+
+        # Get pre-computed data
+        top_n_subgames = self.top_n_activations.get(feature_index_j, [])
+        predictions = self.model_predictions_on_topn.get(feature_index_j)
+
+        if not top_n_subgames or not predictions:
+            fig, ax = plt.subplots(figsize=(12, 2))
+            ax.text(
+                0.5,
+                0.5,
+                f"No top activating games found for feature {feature_index_j}",
+                ha="center",
+                va="center",
+            )
+            ax.set_axis_off()
+            fig.suptitle(info_string)
+            return fig
+
+        # Plotting
+        n_games = len(top_n_subgames)
+        fig, axes = plt.subplots(n_games, 3, figsize=(12, 4 * n_games), squeeze=False)
+        fig.suptitle(info_string, fontsize=16)
+
+        for i, game in enumerate(top_n_subgames):
+            # Board state
+            board = [""] * 9
+            current_player = "X"
+            for move in game:
+                if move < 9:
+                    board[move] = current_player
+                    current_player = "O" if current_player == "X" else "X"
+
+            # Model Predictions
+            distributions = [
+                predictions["weak"][i],
+                predictions["strong"][i],
+                predictions["finetuned"][i],
+            ]
+            titles = ["Weak Model", "Strong Model", "Finetuned Model"]
+
+            for j, (dist, title_prefix) in enumerate(zip(distributions, titles)):
+                ax = axes[i, j]
+                dist_np = dist.numpy().flatten()
+                board_grid = dist_np[:9].reshape(3, 3)
+                end_game_prob = dist_np[9] if len(dist_np) > 9 else 0.0
+
+                ax.imshow(board_grid, vmin=0, vmax=1, cmap="viridis")
+                ax.set_title(f"{title_prefix}\n(End-game: {end_game_prob:.2f})")
+                ax.set_xticks([])
+                ax.set_yticks([])
+
+                for pos, symbol in enumerate(board):
+                    if symbol:
+                        row, col = divmod(pos, 3)
+                        ax.text(
+                            col,
+                            row,
+                            symbol,
+                            ha="center",
+                            va="center",
+                            fontsize=16,
+                            color="white",
+                        )
+
+        # Add a single, shared colorbar
+        norm = mcolors.Normalize(vmin=0, vmax=1)
+        sm = ScalarMappable(norm=norm, cmap="viridis")
+        cbar_ax = fig.add_axes([0.95, 0.15, 0.03, 0.7])
+        fig.colorbar(sm, cax=cbar_ax)
+        fig.tight_layout(
+            rect=[0, 0, 0.93, 0.95]
+        )  # Adjust rect to make space for suptitle
+
+        return fig
