@@ -199,7 +199,7 @@ if __name__ == "__main__":
     # pretrained_project_name_strong = "tictactoe_pretraining_random"
 
     # finetuned_project_name = "tictactoe_finetuning6"
-    finetuned_project_name = "tictactoe_finetuning_use_best_val_step6_lre5_wde2"
+    finetuned_project_name = "tictactoe_finetuning_use_best_val_step6_lre5_wde2_100"
     # finetuned_project_name = "tictactoe_finetuning_random6"
     # finetuned_project_name = "tictactoe_finetuning_use_best_val_step_random6"
 

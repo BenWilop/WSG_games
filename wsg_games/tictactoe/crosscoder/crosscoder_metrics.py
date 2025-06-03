@@ -790,7 +790,7 @@ def display_feature_information(
     top_n_subgames_finetuned_model = []
     for game in top_n_subgames:
         game = t.tensor(game)
-        # game: [n_moves]
+        game: [n_moves]
         # softmax(weak_model(game), dim=-1): [n_moves, n_tokens]
         # we append [n_tokens], i.e. the predictions at the last token
         top_n_subgames_weak_model.append(softmax(weak_model(game), dim=-1)[:, -1, :])
