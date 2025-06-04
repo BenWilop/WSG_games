@@ -802,7 +802,7 @@ class CrosscoderMetrics:
         return model_predictions_on_topn
 
     def display_feature_information(
-        self, feature_index_j: int, plot_strong_model: bool = False
+        self, feature_index_j: int, plot_weak_model: bool = False
     ) -> plt.Figure:
         """
         Displays the pre-computed information for a single feature,
@@ -846,17 +846,20 @@ class CrosscoderMetrics:
         ]
         all_titles = ["Weak Model", "Strong Model", "Finetuned Model"]
 
-        if plot_strong_model:
+        if plot_weak_model:
             distributions_to_plot = [
                 (d[i] for d in all_distributions) for i in range(len(top_n_subgames))
             ]
             titles_to_plot = all_titles
         else:
             distributions_to_plot = [
-                (all_distributions[0][i], all_distributions[2][i])
+                (
+                    all_distributions[1][i],
+                    all_distributions[2][i],
+                )  # Dont plot [0] which is the weak one
                 for i in range(len(top_n_subgames))
             ]
-            titles_to_plot = [all_titles[0], all_titles[2]]
+            titles_to_plot = [all_titles[1], all_titles[2]]
 
         n_games = len(top_n_subgames)
 
@@ -864,7 +867,7 @@ class CrosscoderMetrics:
         # START OF CONDITIONAL LAYOUT LOGIC
         # =========================================================================
 
-        if plot_strong_model:
+        if plot_weak_model:
             # --- LAYOUT 1: 3 Models, 2 side-by-side game groups ---
             n_models_per_group = 3
             n_plot_rows = math.ceil(n_games / 2)
