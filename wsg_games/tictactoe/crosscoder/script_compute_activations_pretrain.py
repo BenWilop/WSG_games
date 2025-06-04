@@ -104,7 +104,7 @@ if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe/"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe/"
     project_name_pretrain = "tictactoe_pretraining6"
-    crosscoder_folder = experiment_folder + "tictactoe/crosscoder/"
+    crosscoder_folder = experiment_folder + "tictactoe/crosscoder6/"
     game = Game.TICTACTOE
     n_indices = 10
     main_compute_activations_pretrain(

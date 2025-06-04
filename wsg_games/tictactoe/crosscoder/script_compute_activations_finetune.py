@@ -106,9 +106,9 @@ if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe/"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe/"
     project_name_finetune = "tictactoe_finetuning_use_best_val_step6_lre5"
-    crosscoder_folder = experiment_folder + "tictactoe/crosscoder/"
+    crosscoder_folder = experiment_folder + "tictactoe/crosscoder6/"
     game = Game.TICTACTOE
-    indices = [5, 6, 7, 8, 9]
+    indices = [0, 1, 2, 3, 4]
     main_compute_activations_finetune(
         data_folder,
         experiment_folder,

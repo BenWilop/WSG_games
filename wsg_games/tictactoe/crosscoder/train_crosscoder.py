@@ -22,7 +22,7 @@ def get_training_cfg_cross_coder():
         "validate_every_n_steps": 1000,
         "batch_size": 64,
         "expansion_factor": 4,  # 32 in https://arxiv.org/pdf/2504.02922?
-        "k": 10,
+        "k": 1,
     }
     return training_cfg_cross_coder
 
