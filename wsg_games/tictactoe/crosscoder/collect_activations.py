@@ -1,8 +1,9 @@
 import torch as t
 from jaxtyping import Float, Int
 from torch import Tensor
+import os
 
-from dictionary_learning.dictionary_learning.cache import *
+from dictionary_learning.cache import *
 import transformer_lens.utils as utils
 from transformer_lens import HookedTransformer
 
@@ -204,6 +205,12 @@ def compute_activations(
             device,
             index,
         )
+        print(project_name_finetune)
+        print(weak_model_size)
+        print(model_size)
+        print(experiment_folder)
+        print(device)
+        print(index)
     else:
         model = load_model(
             project_name_pretrain,

@@ -62,16 +62,11 @@ def run_compute_activations_finetune_task(
 def main_compute_activations_finetune(
     data_folder: str,
     experiment_folder: str,
-    project_name_pretrain: str,
+    project_name_finetune: str,
     crosscoder_folder: str,
     game: Game,
-    n_indices: int,
+    indices: list[int],
 ):
-    print("Starting pretraining...")
-    print(f"  data_folder: {data_folder}")
-    print(f"  experiment_folder: {experiment_folder}")
-    print(f"  n_indices: {n_indices}")
-
     model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
     finetuning_pairs = [
         (weak_size, model_sizes[j])
@@ -80,7 +75,7 @@ def main_compute_activations_finetune(
     ]
 
     all_jobs: list[Job] = []
-    for index in range(n_indices):
+    for index in indices:
         print(f"\n--- Preparing jobs for Index {index} ---")
         jobs_for_index = 0
         for weak_model_size, strong_model_size in finetuning_pairs:
@@ -102,18 +97,23 @@ def main_compute_activations_finetune(
             f"  Prepared {jobs_for_index} jobs for Index {index}. Total jobs scheduled so far: {len(all_jobs)}"
         )
 
-    parallel_gpu_executor = ParallelGpuExecutor()
+    parallel_gpu_executor = ParallelGpuExecutor(ngpus=1)
     parallel_gpu_executor.submit_jobs(all_jobs)
-    print("\Computing activations pretrain script finished.")
+    print("\Computing activations finetune script finished.")
 
 
 if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe/"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe/"
-    project_name_finetune = "tictactoe/tictactoe_finetuning_use_best_val_step6_lre5"
+    project_name_finetune = "tictactoe_finetuning_use_best_val_step6_lre5"
     crosscoder_folder = experiment_folder + "tictactoe/crosscoder/"
     game = Game.TICTACTOE
-    n_indices = 10
+    indices = [5, 6, 7, 8, 9]
     main_compute_activations_finetune(
-        data_folder, experiment_folder, project_name_finetune, crosscoder_folder, game
+        data_folder,
+        experiment_folder,
+        project_name_finetune,
+        crosscoder_folder,
+        game,
+        indices,
     )

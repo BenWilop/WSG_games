@@ -106,6 +106,7 @@ def load_finetuned_model(
     matching_files = load_finetuned_model_get_matching_files(
         project_name, weak_model_size, strong_model_size, experiment_folder, index
     )
+    print("matching_files: ", matching_files)
     if not matching_files:
         print(
             f"No finetuned model found for weak {weak_model_size} and strong {strong_model_size}, and index {index}"

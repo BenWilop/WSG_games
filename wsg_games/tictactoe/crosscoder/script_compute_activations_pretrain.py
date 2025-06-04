@@ -95,7 +95,7 @@ def main_compute_activations_pretrain(
             f"  Prepared {jobs_for_index} jobs for Index {index}. Total jobs scheduled so far: {len(all_jobs)}"
         )
 
-    parallel_gpu_executor = ParallelGpuExecutor()
+    parallel_gpu_executor = ParallelGpuExecutor(ngpus=1)
     parallel_gpu_executor.submit_jobs(all_jobs)
     print("\Computing activations pretrain script finished.")
 
@@ -103,7 +103,7 @@ def main_compute_activations_pretrain(
 if __name__ == "__main__":
     data_folder = "/homes/55/bwilop/wsg/data/tictactoe/"
     experiment_folder = "/homes/55/bwilop/wsg/experiments/tictactoe/"
-    project_name_pretrain = "tictactoe/tictactoe_pretraining6"
+    project_name_pretrain = "tictactoe_pretraining6"
     crosscoder_folder = experiment_folder + "tictactoe/crosscoder/"
     game = Game.TICTACTOE
     n_indices = 10

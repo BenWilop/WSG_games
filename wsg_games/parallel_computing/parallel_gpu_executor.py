@@ -52,8 +52,11 @@ class ParallelGpuExecutor:
     Manages a pool of GPU workers to execute a list of jobs in parallel.
     """
 
-    def __init__(self):
-        self.ngpus = t.cuda.device_count()
+    def __init__(self, ngpus: int | None = None):
+        if ngpus:
+            self.ngpus = ngpus
+        else:
+            self.ngpus = t.cuda.device_count()
         if self.ngpus == 0:
             raise RuntimeError("No CUDA GPUs detected.")
         print(f"Found {self.ngpus} GPUs.")

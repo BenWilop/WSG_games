@@ -13,9 +13,8 @@ import seaborn as sns
 from torch.nn.functional import softmax
 import math
 
-from dictionary_learning.dictionary_learning import CrossCoder
-from dictionary_learning.dictionary_learning.dictionary import BatchTopKCrossCoder
-from dictionary_learning.dictionary_learning.cache import *
+from dictionary_learning.dictionary import CrossCoder, BatchTopKCrossCoder
+from dictionary_learning.cache import *
 
 from wsg_games.utils import IndexedDataset, HistogramData
 from wsg_games.tictactoe.crosscoder.collect_activations import (

@@ -9,8 +9,8 @@ from dictionary_learning.dictionary_learning.cache import *
 from datetime import datetime
 import wandb
 
-from dictionary_learning.dictionary_learning.training import trainSAE
-from dictionary_learning.dictionary_learning.trainers.crosscoder import (
+from dictionary_learning.training import trainSAE
+from dictionary_learning.trainers.crosscoder import (
     BatchTopKCrossCoderTrainer,
 )
 
