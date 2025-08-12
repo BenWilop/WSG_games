@@ -255,7 +255,6 @@ def finetune_strong_with_weak(
 def _plot_wsg_side_by_side(
     df: pd.DataFrame,
     model_sizes: list[str],
-    weak_size_to_color: dict[str, tuple],
     save_path: str | None,
 ) -> None:
     """
@@ -268,17 +267,19 @@ def _plot_wsg_side_by_side(
     df["wsg_gap_before_finetuning"] /= 100
     df["wsg_gap_after_finetuning"] /= 100
 
-    fig, (ax_before, ax_after) = plt.subplots(1, 2, figsize=(20, 8), sharey=True)
-    fig.suptitle("WSG Gap Analysis: Before vs. After Finetuning (Mean ± SEM)", y=1.02)
+    fig, (ax_before, ax_after) = plt.subplots(1, 2, figsize=(24, 8), sharey=True)
+    fig.suptitle("WSG Gap Analysis: Before vs. After Finetuning (Mean ± SEM)", y=0.98)
+    colors = plt.cm.viridis(np.linspace(0, 1, len(model_sizes)))
+    weak_size_to_color = {size: color for size, color in zip(model_sizes, colors)}
 
     # --- Helper function for advanced axis formatting ---
     def _format_axis(ax, title):
         ax.set_xscale("log")
-        ax.set_xlabel("Strong Model Parameters (log scale)")
+        ax.set_xlabel("Strong Model Parameters")
         ax.set_title(title)
 
         # --- Y-axis Symlog Scaling and Formatting from Reference ---
-        ax.set_yscale("symlog", linthresh=1.0)
+        ax.set_yscale("symlog", linthresh=1.0, linscale=2.0)
 
         # Determine y-axis range from all data points
         all_vals = pd.concat(
@@ -287,7 +288,7 @@ def _plot_wsg_side_by_side(
         y_min, y_max = all_vals.min(), all_vals.max()
         y_margin = (y_max - y_min) * 0.1
         # y_range = (min(-10, y_min - y_margin), max(120, y_max + y_margin))
-        y_range = (-50, 1)
+        y_range = (-50, 10)
         ax.set_ylim(y_range)
 
         # Add horizontal reference lines
@@ -391,11 +392,12 @@ def _plot_wsg_side_by_side(
         )
 
     # --- Final Formatting ---
-    _format_axis(ax_before, "Before Finetuning")
-    _format_axis(ax_after, "After Finetuning")
-    ax_before.set_ylabel("Recovered % (PGR)")
+    _format_axis(ax_before, "Pretrained")
+    _format_axis(ax_after, "Finetuned")
+    ax_before.set_ylabel("PGR")
 
     handles, labels = ax_before.get_legend_handles_labels()
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
     fig.legend(
         handles,
         labels,
@@ -404,8 +406,6 @@ def _plot_wsg_side_by_side(
         bbox_to_anchor=(0.5, 0.95),
         ncol=len(model_sizes),
     )
-
-    fig.tight_layout(rect=[0, 0, 1, 0.93])
 
     if save_path:
         # File suffix is now constant as the scale is no longer an option
@@ -845,7 +845,6 @@ def plot_wsg_gap_finetuned_models(
             _plot_wsg_side_by_side(
                 df=df,
                 model_sizes=model_sizes,
-                weak_size_to_color=weak_size_to_color,  # Pass the dictionary
                 save_path=save_path,
             )
 
