@@ -11,6 +11,7 @@ from wsg_games.meta import Game, game_to_ignore_first_n_moves
 from wsg_games.tictactoe.train.train import rearrange
 from wsg_games.tictactoe.game import Goal
 from wsg_games.tictactoe.train.save_load_models import load_model, load_finetuned_model
+from dictionary_learning.cache import ActivationCache, ActivationCacheTuple
 
 
 def get_activations(

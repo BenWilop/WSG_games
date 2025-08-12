@@ -20,6 +20,7 @@ from wsg_games.utils import IndexedDataset, HistogramData
 from wsg_games.tictactoe.crosscoder.collect_activations import (
     get_list_of_games_from_paired_activation_cache,
 )
+from wsg_games.tictactoe.game import *
 import matplotlib.colors as mcolors
 from matplotlib.cm import ScalarMappable
 from matplotlib.lines import Line2D
@@ -106,6 +107,14 @@ class CrosscoderMetrics:
             self.hist_f_j_topk,
         ) = self.compute_activation_histograms()
         self.plot_activation_histograms()
+
+        self.condition_feature_counts = self.analyze_condition_features(
+            [
+                (self.game_ends_with_diagonal, "diagonal_wins"),
+                (self.can_complete_diagonal, "diagonal_completion"),
+                (self.must_block_diagonal, "diagonal_blocking"),
+            ]
+        )
 
         # Save
         print(f"New CrosscoderMetrics saved.")
@@ -1051,3 +1060,134 @@ class CrosscoderMetrics:
         fig.tight_layout(rect=[0, 0.08, 1, 0.94])
 
         return fig
+
+    #################
+    # Win-condition #
+    #################
+
+    # Helper condition functions for diagonal analysis
+    def game_ends_with_diagonal(self, game: list[int]) -> bool:
+        """Check if game ended with a diagonal win."""
+        board = Board(game)
+        if board.game_state != State.OVER:
+            return False
+
+        diagonal_positions = [(0, 4, 8), (2, 4, 6)]
+        term_conditions, _, _ = board.get_termination_conditions()
+        return any(cond in diagonal_positions for cond in term_conditions)
+
+    def can_complete_diagonal(self, game: list[int]) -> bool:
+        """Check if current player can complete a diagonal on next move."""
+        if len(game) == 0:
+            return False
+
+        board = Board(game[:-1])  # State before last move
+        if board.game_state != State.ONGOING:
+            return False
+
+        diagonal_positions = [(0, 4, 8), (2, 4, 6)]
+        current_player = board.turn
+        last_move = game[-1]
+
+        for diag in diagonal_positions:
+            occupied = [pos for pos in diag if board.grid[pos] == current_player]
+            empty = [pos for pos in diag if board.grid[pos] is None]
+            if len(occupied) == 2 and len(empty) == 1 and empty[0] == last_move:
+                return True
+        return False
+
+    def must_block_diagonal(self, game: list[int]) -> bool:
+        """Check if current player must block opponent's diagonal threat."""
+        if len(game) == 0:
+            return False
+
+        board = Board(game[:-1])  # State before last move
+        if board.game_state != State.ONGOING:
+            return False
+
+        diagonal_positions = [(0, 4, 8), (2, 4, 6)]
+        opponent = Player.O if board.turn == Player.X else Player.X
+        last_move = game[-1]
+
+        for diag in diagonal_positions:
+            occupied = [pos for pos in diag if board.grid[pos] == opponent]
+            empty = [pos for pos in diag if board.grid[pos] is None]
+            if len(occupied) == 2 and len(empty) == 1 and empty[0] == last_move:
+                return True
+        return False
+
+    def analyze_condition_features(
+        self, condition_methods: list[tuple[callable, str]]
+    ) -> None:
+        """
+        Analyzes features that activate most for given conditions.
+
+        Args:
+            condition_methods: List of (function, name) tuples where function takes a game
+                            (list of moves) and returns bool if condition is met
+        """
+        dict_size = self.crosscoder.dict_size
+
+        # Initialize count vectors: condition_name -> tensor[dict_size]
+        condition_feature_counts = {}
+        for _, name in condition_methods:
+            condition_feature_counts[name] = t.zeros(dict_size, dtype=t.long)
+
+        # Get validation data
+        val_dataset, _ = self._get_val_data_set_and_dataloader()
+
+        self.crosscoder.eval()
+        with t.no_grad():
+            for activations, indices in self._activations_both_generator(
+                "Analyzing condition features", return_indices=True
+            ):
+                # Get feature activations
+                f_j = self.crosscoder.get_activations(
+                    activations
+                )  # [batch_size, dict_size]
+
+                # Get most activated feature for each game
+                max_feature_indices = f_j.argmax(dim=1)  # [batch_size]
+
+                # Get corresponding games
+                list_of_subgames = get_list_of_games_from_paired_activation_cache(
+                    val_dataset, indices.cpu()
+                )
+
+                # Check conditions for each game
+                for batch_idx, game in enumerate(list_of_subgames):
+                    max_feature_idx = max_feature_indices[batch_idx].item()
+
+                    for condition_func, condition_name in condition_methods:
+                        if condition_func(game):
+                            condition_feature_counts[condition_name][
+                                max_feature_idx
+                            ] += 1
+        return condition_feature_counts
+
+    def print_top_condition_features(self, top_k: int = 3) -> None:
+        """Prints top k features for each analyzed condition."""
+        if not hasattr(self, "condition_feature_counts"):
+            print(
+                "No condition analysis has been run. Call analyze_condition_features first."
+            )
+            return
+
+        for condition_name, count_vector in self.condition_feature_counts.items():
+            print(f"\n{condition_name}:")
+
+            # Get top k features
+            top_values, top_indices = t.topk(
+                count_vector, k=min(top_k, (count_vector > 0).sum().item())
+            )
+
+            if top_values[0] == 0:
+                print("  No features found for this condition")
+                continue
+
+            for rank, (feature_idx, count) in enumerate(
+                zip(top_indices, top_values), 1
+            ):
+                print(
+                    f"  {rank}. Feature {feature_idx.item()}: {count.item()} activations"
+                )

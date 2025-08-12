@@ -17,9 +17,9 @@ from dictionary_learning.trainers.crosscoder import (
 
 def get_training_cfg_cross_coder():
     training_cfg_cross_coder = {
-        "learning_rate": 1e-3,
-        "max_steps": 20000,
-        "validate_every_n_steps": 1000,
+        "learning_rate": 1e-3,  # 1e-3,
+        "max_steps": 50000,  # 20000
+        "validate_every_n_steps": 2000,  # 1000
         "batch_size": 64,
         "expansion_factor": 4,  # 32 in https://arxiv.org/pdf/2504.02922?
         "k": 1,
@@ -149,8 +149,15 @@ def train_crosscoder(
         "k": k,  # 'k' as a top-level argument for the trainer
         "layer": layer,  # Only for logging
         "lm_name": experiment_name,  # Only for logging
-        # "dict_class_kwargs": {
-        # },
+        "dict_class_kwargs": {
+            "code_normalization": "CROSSCODER",  # TODO Only to resolve a bug.
+        },
+        # New
+        # "auxk_alpha": 1.0,
+        "threshold_start_step": 10,  # 100 # leads to bad reconstruction on validation set
+        # K-annealing helps. Longer annealing time is good, higher k_max is good. But both increase training time.
+        "k_max": 30,
+        "k_annealing_steps": 30000,  # 13000,
     }
     # train the sparse autoencoder (SAE)
     wandb.finish()

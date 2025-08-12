@@ -471,156 +471,204 @@ def plot_wsg_gap_finetuned_models(
     indices: int | list[int | None] | None,
     aggregate_data: bool = True,
     save_path: str | None = None,
+    overwrite: bool = False,
 ) -> None:
-    # Indices
-    if type(indices) == int:
-        indices = [indices]
-    elif indices is None:
-        max_idx = -1
-        for i in range(100):
-            if not load_finetuned_model(
-                finetuned_project_name, "nano", "micro", experiment_folder, device, i
-            ):
-                max_idx = i
-                break
-        indices = [i for i in range(max_idx)]
+    """
+    Computes or loads cached WSG gap data and plots the results.
 
-    print("Indices: ", indices)
-
-    # Evaluate models (pretrained)
+    Args:
+        data_folder: Path to the data.
+        experiment_folder: Path to the experiment logs and models.
+        pretrained_project_name_weak: Project name for weak pretrained models.
+        pretrained_project_name_strong: Project name for strong pretrained models.
+        finetuned_project_name: Project name for finetuned models.
+        device: The torch device to use for computation.
+        indices: A single index or list of indices for data splits.
+        aggregate_data: If True, plots mean and std dev; otherwise, individual lines.
+        save_path: Directory to save plots and cache. Caching is disabled if None.
+        overwrite: If True, forces re-computation and overwrites the existing cache.
+    """
     model_sizes = ["nano", "micro", "mini", "small", "medium", "large", "huge"]
-    index_size_to_avg_weak_loss: dict[tuple[int, str], float] = {}
-    index_size_to_n_parameters: dict[tuple[int, str], int] = {}
-    for index in indices:
-        _, _, _, tictactoe_test_data = load_split_data(
-            data_folder, device=device, index=index
-        )
-        tictactoe_test_data = move_tictactoe_data_to_device(
-            tictactoe_test_data, device=device
-        )
-        for model_size in model_sizes:
-            model = load_model(
-                pretrained_project_name_weak,
-                model_size,
-                Goal.WEAK_GOAL,
-                experiment_folder,
-                device=device,
-                index=index,
+    df = None
+    cache_file_path = None
+
+    if save_path:
+        os.makedirs(save_path, exist_ok=True)
+        cache_file_path = os.path.join(save_path, "wsg_results_cache.pkl")
+
+    # --- 1. Load from Cache or Compute ---
+    if cache_file_path and not overwrite and os.path.exists(cache_file_path):
+        try:
+            print(f"Loading cached results from {cache_file_path}...")
+            df = pd.read_pickle(cache_file_path)
+            # Ensure model_sizes list is consistent with the loaded data
+            loaded_sizes = df["weak_size"].unique()
+            model_sizes = [s for s in model_sizes if s in loaded_sizes]
+            print("Successfully loaded results from cache.")
+        except Exception as e:
+            print(f"Could not load cache file: {e}. Recomputing...")
+            df = None  # Ensure df is None to trigger recomputation
+
+    if df is None:
+        print("No cache found or overwrite=True, computing results...")
+        # Indices
+        if isinstance(indices, int):
+            indices = [indices]
+        elif indices is None:
+            max_idx = -1
+            for i in range(100):
+                if not load_finetuned_model(
+                    finetuned_project_name,
+                    "nano",
+                    "micro",
+                    experiment_folder,
+                    device,
+                    i,
+                ):
+                    max_idx = i
+                    break
+            indices = list(range(max_idx))
+
+        print("Indices: ", indices)
+
+        # Evaluate models (pretrained)
+        index_size_to_avg_weak_loss: dict[tuple[int, str], float] = {}
+        index_size_to_n_parameters: dict[tuple[int, str], int] = {}
+        for index in indices:
+            _, _, _, tictactoe_test_data = load_split_data(
+                data_folder, device=device, index=index
             )
-            if not model:
-                print(
-                    f"Model of model_size {model_size} and goal {Goal.WEAK_GOAL} not found, skipping."
+            tictactoe_test_data = move_tictactoe_data_to_device(
+                tictactoe_test_data, device=device
+            )
+            for model_size in model_sizes:
+                model = load_model(
+                    pretrained_project_name_weak,
+                    model_size,
+                    Goal.WEAK_GOAL,
+                    experiment_folder,
+                    device=device,
+                    index=index,
                 )
-                continue
-            index_size_to_avg_weak_loss[(index, model_size)] = compute_avg_loss(
-                model,
-                tictactoe_test_data.games_data,
-                tictactoe_test_data.weak_goals_labels,
+                if not model:
+                    continue
+                index_size_to_avg_weak_loss[(index, model_size)] = compute_avg_loss(
+                    model,
+                    tictactoe_test_data.games_data,
+                    tictactoe_test_data.weak_goals_labels,
+                )
+                index_size_to_n_parameters[(index, model_size)] = count_parameters(
+                    model
+                )
+                del model
+                t.cuda.empty_cache()
+
+        # Evaluate models (finetuned)
+        finetuning_pairs = [
+            (weak_size, model_sizes[j])
+            for i, weak_size in enumerate(model_sizes)
+            for j in range(i + 1, len(model_sizes))
+        ]
+        results = []
+        for index in indices:
+            _, _, _, tictactoe_test_data = load_split_data(
+                data_folder, device=device, index=index
             )
-            index_size_to_n_parameters[(index, model_size)] = count_parameters(model)
+            tictactoe_test_data = move_tictactoe_data_to_device(
+                tictactoe_test_data, device=device
+            )
+            for weak_size, strong_size in finetuning_pairs:
+                if (index, weak_size) not in index_size_to_avg_weak_loss or (
+                    index,
+                    strong_size,
+                ) not in index_size_to_avg_weak_loss:
+                    continue
 
-            # Clean memory
-            model.cpu()
-            del model
-            t.cuda.empty_cache()
+                L_weak = index_size_to_avg_weak_loss[(index, weak_size)]
+                L_strong_ceiling = index_size_to_avg_weak_loss[(index, strong_size)]
 
-    # Evaluate models (finetuned)
-    finetuning_pairs = [
-        (weak_size, model_sizes[j])
-        for i, weak_size in enumerate(model_sizes)
-        for j in range(i + 1, len(model_sizes))  # strong_size > weak_size index
-    ]
-    results = []
-    for index in indices:
-        _, _, _, tictactoe_test_data = load_split_data(
-            data_folder, device=device, index=index
+                # Strong model before finetuning
+                strong_model_on_strong_rule = load_model(
+                    pretrained_project_name_strong,
+                    strong_size,
+                    Goal.STRONG_GOAL,
+                    experiment_folder,
+                    device=device,
+                    index=index,
+                )
+                if not strong_model_on_strong_rule:
+                    continue
+                L_weak_to_strong_before = compute_avg_loss(
+                    strong_model_on_strong_rule,
+                    tictactoe_test_data.games_data,
+                    tictactoe_test_data.weak_goals_labels,
+                )
+                wsg_gap_before = (
+                    (L_weak_to_strong_before - L_weak)
+                    / (L_strong_ceiling - L_weak)
+                    * 100
+                )
+
+                # Finetuned model
+                finetuned_model = load_finetuned_model(
+                    finetuned_project_name,
+                    weak_size,
+                    strong_size,
+                    experiment_folder,
+                    device=device,
+                    index=index,
+                )
+                if not finetuned_model:
+                    continue
+                L_weak_to_strong_after = compute_avg_loss(
+                    finetuned_model,
+                    tictactoe_test_data.games_data,
+                    tictactoe_test_data.weak_goals_labels,
+                )
+                wsg_gap_after = (
+                    (L_weak_to_strong_after - L_weak)
+                    / (L_strong_ceiling - L_weak)
+                    * 100
+                )
+
+                results.append(
+                    {
+                        "index": index if index is not None else -1,
+                        "weak_size": weak_size,
+                        "strong_size": strong_size,
+                        "n_parameters_weak": index_size_to_n_parameters[
+                            (index, weak_size)
+                        ],
+                        "n_parameters_strong": index_size_to_n_parameters[
+                            (index, strong_size)
+                        ],
+                        "wsg_gap_before_finetuning": wsg_gap_before,
+                        "wsg_gap_after_finetuning": wsg_gap_after,
+                    }
+                )
+                del finetuned_model, strong_model_on_strong_rule
+                t.cuda.empty_cache()
+
+        if not results:
+            print("No models found or results generated.")
+            return
+
+        df = pd.DataFrame(results)
+        # Save newly computed results to cache
+        if cache_file_path:
+            print(f"Saving results to cache at {cache_file_path}")
+            df.to_pickle(cache_file_path)
+
+    # --- 2. Plotting ---
+    if df is not None and not df.empty:
+        df.sort_values(by=["weak_size", "n_parameters_strong", "index"], inplace=True)
+        print("\nPlotting results with log scale y-axis...")
+        plot_wsg_plot(
+            df, model_sizes, aggregate_data, y_axis_log=True, save_path=save_path
         )
-        tictactoe_test_data = move_tictactoe_data_to_device(
-            tictactoe_test_data, device=device
+        print("\nPlotting results with linear scale y-axis...")
+        plot_wsg_plot(
+            df, model_sizes, aggregate_data, y_axis_log=False, save_path=save_path
         )
-        for weak_size, strong_size in finetuning_pairs:
-            L_weak = index_size_to_avg_weak_loss[(index, weak_size)]
-            L_strong_ceiling = index_size_to_avg_weak_loss[(index, strong_size)]
-            if L_weak is None or L_strong_ceiling is None:
-                print(
-                    f"For weak_size {weak_size} and strong_size {strong_size} not all models exist, skipping."
-                )
-                continue
-
-            # Strong model before finetuning
-            strong_model_on_strong_rule = load_model(
-                pretrained_project_name_strong,
-                strong_size,
-                Goal.STRONG_GOAL,
-                experiment_folder,
-                device=device,
-                index=index,
-            )
-            if not strong_model_on_strong_rule:
-                print(
-                    f"Model of model_size {strong_size} and goal {Goal.STRONG_GOAL} not found, skipping."
-                )
-                continue
-            L_weak_to_strong = compute_avg_loss(
-                strong_model_on_strong_rule,
-                tictactoe_test_data.games_data,
-                tictactoe_test_data.weak_goals_labels,
-            )
-            wsg_gap_before_finetuning = (
-                (L_weak_to_strong - L_weak) / (L_strong_ceiling - L_weak) * 100
-            )
-
-            # Finetuned model (strong -> weak)
-            finetuned_model = load_finetuned_model(
-                finetuned_project_name,
-                weak_size,
-                strong_size,
-                experiment_folder,
-                device=device,
-                index=index,
-            )
-            if not finetuned_model:
-                print(
-                    f"Finetuned model of weak_size {weak_size} and strong_size {strong_size} not found, skipping."
-                )
-                continue
-            L_weak_to_strong = compute_avg_loss(
-                finetuned_model,
-                tictactoe_test_data.games_data,
-                tictactoe_test_data.weak_goals_labels,
-            )
-            wsg_gap_after_finetuning = (
-                (L_weak_to_strong - L_weak) / (L_strong_ceiling - L_weak) * 100
-            )
-
-            n_parameters_weak = index_size_to_n_parameters[(index, weak_size)]
-            n_parameters_strong = index_size_to_n_parameters[(index, strong_size)]
-            results.append(
-                {
-                    "index": index
-                    if index is not None
-                    else -1,  # -1 as placeholder for None to make df easier
-                    "weak_size": weak_size,
-                    "strong_size": strong_size,
-                    "n_parameters_weak": n_parameters_weak,
-                    "n_parameters_strong": n_parameters_strong,
-                    "wsg_gap_before_finetuning": wsg_gap_before_finetuning,
-                    "wsg_gap_after_finetuning": wsg_gap_after_finetuning,
-                }
-            )
-
-            # Clean memory
-            finetuned_model.cpu()
-            del finetuned_model
-            t.cuda.empty_cache()
-
-    if len(results) == 0:
-        print("No models found.")
-        return
-
-    # Plot
-    df = pd.DataFrame(results)
-    df.sort_values(by=["weak_size", "n_parameters_strong", "index"], inplace=True)
-
-    plot_wsg_plot(df, model_sizes, aggregate_data, True, save_path)
-    plot_wsg_plot(df, model_sizes, aggregate_data, False, save_path)
+    else:
+        print("No data available to plot.")
