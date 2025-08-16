@@ -268,7 +268,7 @@ def _plot_wsg_side_by_side(
     df["wsg_gap_after_finetuning"] /= 100
 
     fig, (ax_before, ax_after) = plt.subplots(1, 2, figsize=(24, 8), sharey=True)
-    fig.suptitle("WSG Gap Analysis: Before vs. After Finetuning (Mean ± SEM)", y=0.98)
+    # fig.suptitle("PGR: Before vs. After Finetuning (Mean ± SEM)", y=0.98)
     colors = plt.cm.viridis(np.linspace(0, 1, len(model_sizes)))
     weak_size_to_color = {size: color for size, color in zip(model_sizes, colors)}
 
@@ -369,7 +369,7 @@ def _plot_wsg_side_by_side(
             marker="o",
             linestyle="-",
             color=color,
-            label=f"Weak: {weak_size}",
+            label=f"{weak_size}",
         )
         ax_before.fill_between(
             x,
@@ -403,8 +403,9 @@ def _plot_wsg_side_by_side(
         labels,
         title="Weak Model Size",
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.95),
+        bbox_to_anchor=(0.5, 0.865),
         ncol=len(model_sizes),
+        prop={"family": "monospace"},
     )
 
     if save_path:
