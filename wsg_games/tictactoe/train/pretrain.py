@@ -81,8 +81,10 @@ def plot_loss_pretrain_models(
     device: t.device,
     indices: int | list[int | None] | None,
     save_path: str | None = None,
+    overwrite: bool = False,
+    simple_plot: bool = False,
 ) -> None:
-    minimal_loss_weak = 0.34
+    minimal_loss_weak = 0.36  # 0.34
     minimal_loss_strong = 0.32
 
     # Indices
@@ -100,177 +102,275 @@ def plot_loss_pretrain_models(
 
     print("Indices: ", indices)
 
-    # Evaluate models
-    results = []
-    for index in indices:
-        _, _, _, tictactoe_test_data = load_split_data(
-            data_folder, device=device, index=index
+    # Caching
+    results_df = None
+    pickle_path = None
+    if save_path:
+        base_name = os.path.splitext(os.path.basename(save_path))[0]
+        pickle_path = os.path.join(
+            os.path.dirname(save_path), f"{base_name}_results.pkl"
         )
-        tictactoe_test_data = move_tictactoe_data_to_device(
-            tictactoe_test_data, device=device
-        )
-        for model_size in [
-            "nano",
-            "micro",
-            "mini",
-            "small",
-            "medium",
-            "large",
-            "huge",
-        ]:
-            for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
-                model = load_model(
-                    project_name, model_size, goal, experiment_folder, device, index
-                )
-                if not model:
-                    print("Missing: ", index, model_size, goal)
-                    continue
 
-                # Evaluate
-                n_parameters = count_parameters(model)
+    print(pickle_path)
+    print(
+        "load results? ",
+        overwrite,
+        pickle_path is not None,
+        os.path.exists(pickle_path),
+    )
+    if not overwrite and pickle_path is not None and os.path.exists(pickle_path):
+        try:
+            print(f"Loading cached results from {pickle_path}...")
+            results_df = pd.read_pickle(pickle_path)
+            print("Successfully loaded results from cache.")
+        except Exception as e:
+            print(f"Could not load cache file: {e}. Recomputing...")
 
-                avg_random_loss = compute_avg_loss(
-                    model,
-                    tictactoe_test_data.games_data,
-                    tictactoe_test_data.random_move_labels,
-                )
-                avg_weak_loss = compute_avg_loss(
-                    model,
-                    tictactoe_test_data.games_data,
-                    tictactoe_test_data.weak_goals_labels,
-                )
-                avg_strong_loss = compute_avg_loss(
-                    model,
-                    tictactoe_test_data.games_data,
-                    tictactoe_test_data.strong_goals_labels,
-                )
+    if results_df is None:
+        # Evaluate models
+        results = []
+        for index in indices:
+            _, _, _, tictactoe_test_data = load_split_data(
+                data_folder, device=device, index=index
+            )
+            tictactoe_test_data = move_tictactoe_data_to_device(
+                tictactoe_test_data, device=device
+            )
+            for model_size in [
+                "nano",
+                "micro",
+                "mini",
+                "small",
+                "medium",
+                "large",
+                "huge",
+            ]:
+                for goal in [Goal.WEAK_GOAL, Goal.STRONG_GOAL]:
+                    model = load_model(
+                        project_name, model_size, goal, experiment_folder, device, index
+                    )
+                    if not model:
+                        print("Missing: ", index, model_size, goal)
+                        continue
 
-                results.append(
-                    {
-                        "index": index
-                        if index is not None
-                        else -1,  # -1 as placeholder for None to make df easier
-                        "goal": goal,
-                        "model_size": model_size,
-                        "n_parameters": n_parameters,
-                        "avg_random_loss": avg_random_loss,
-                        "avg_weak_loss": avg_weak_loss,
-                        "avg_strong_loss": avg_strong_loss,
-                    }
-                )
+                    # Evaluate
+                    n_parameters = count_parameters(model)
 
-                # Clean memory
-                model.cpu()
-                del model
-                t.cuda.empty_cache()
+                    avg_random_loss = compute_avg_loss(
+                        model,
+                        tictactoe_test_data.games_data,
+                        tictactoe_test_data.random_move_labels,
+                    )
+                    avg_weak_loss = compute_avg_loss(
+                        model,
+                        tictactoe_test_data.games_data,
+                        tictactoe_test_data.weak_goals_labels,
+                    )
+                    avg_strong_loss = compute_avg_loss(
+                        model,
+                        tictactoe_test_data.games_data,
+                        tictactoe_test_data.strong_goals_labels,
+                    )
 
-    if len(results) == 0:
-        print("No models found.")
-        return
+                    results.append(
+                        {
+                            "index": index
+                            if index is not None
+                            else -1,  # -1 as placeholder for None to make df easier
+                            "goal": goal,
+                            "model_size": model_size,
+                            "n_parameters": n_parameters,
+                            "avg_random_loss": avg_random_loss,
+                            "avg_weak_loss": avg_weak_loss,
+                            "avg_strong_loss": avg_strong_loss,
+                        }
+                    )
+
+                    # Clean memory
+                    model.cpu()
+                    del model
+                    t.cuda.empty_cache()
+
+        if len(results) == 0:
+            print("No models found.")
+            return
+
+        results_df = pd.DataFrame(results)
+
+    # Save to cache if we computed new results
+    if pickle_path and results_df is not None:
+        try:
+            results_df.to_pickle(pickle_path)
+            print(f"Results saved to cache file: {pickle_path}")
+        except Exception as e:
+            print(f"Error saving cache file: {e}")
 
     # Plot
-    df = pd.DataFrame(results)
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+    df = results_df  # Use results_df for plotting
 
-    # Left (Performance on weak rule)
-    ax = axes[0]
-    df_weak = df[df["goal"] == Goal.WEAK_GOAL]
-    sns.lineplot(  # Random
-        data=df_weak,
-        x="n_parameters",
-        y="avg_random_loss",
-        label="Random CE Loss",
-        marker="o",
-        linestyle="-",
-        errorbar="sd",
-        ax=ax,
-        legend=False,
-    )
-    sns.lineplot(  # Weak
-        data=df_weak,
-        x="n_parameters",
-        y="avg_weak_loss",
-        label="Weak CE Loss",
-        marker="s",
-        linestyle="-",
-        errorbar="sd",
-        ax=ax,
-        legend=False,
-    )
-    sns.lineplot(  # Strong
-        data=df_weak,
-        x="n_parameters",
-        y="avg_strong_loss",
-        label="Strong CE Loss",
-        marker="d",
-        linestyle="-",
-        errorbar="sd",
-        ax=ax,
-        legend=False,
-    )
-    ax.axhline(
-        y=minimal_loss_weak,
-        color="gray",
-        linestyle="--",
-        label="Min Achievable Weak Loss",
-    )
-    ax.set_xscale("log")
-    ax.set_ylim(0, 6)
-    ax.set_xlabel("Number of Parameters (log scale)")
-    ax.set_ylabel("Loss (μ ± σ over indices)")
-    ax.set_title(f"Loss vs. Params (Model trained on Goal: {Goal.WEAK_GOAL.value})")
-    ax.legend()
-    ax.grid(True, which="both", ls="--")
+    if simple_plot:
+        # Simple plot: performance on weak rule for models trained on both goals
+        fig, ax = plt.subplots(1, 1, figsize=(10, 7))
 
-    # Right (Performance on strong rule)
-    ax = axes[1]
-    df_strong = df[df["goal"] == Goal.STRONG_GOAL]
-    sns.lineplot(  # Random
-        data=df_strong,
-        x="n_parameters",
-        y="avg_random_loss",
-        label="Random CE Loss",
-        marker="o",
-        linestyle="-",
-        errorbar="sd",
-        ax=ax,
-        legend=False,
-    )
-    sns.lineplot(  # Weak
-        data=df_strong,
-        x="n_parameters",
-        y="avg_weak_loss",
-        label="Weak CE Loss",
-        marker="s",
-        linestyle="-",
-        errorbar="sd",
-        ax=ax,
-        legend=False,
-    )
-    sns.lineplot(  # Strong
-        data=df_strong,
-        x="n_parameters",
-        y="avg_strong_loss",
-        label="Strong CE Loss",
-        marker="d",
-        linestyle="-",
-        errorbar="sd",
-        ax=ax,
-        legend=False,
-    )
-    ax.axhline(
-        y=minimal_loss_strong,
-        color="gray",
-        linestyle="--",
-        label="Min Achievable Strong Loss",
-    )
-    ax.set_xscale("log")
-    ax.set_ylim(0, 6)
-    ax.set_xlabel("Number of Parameters (log scale)")
-    ax.set_ylabel("Loss (μ ± σ over indices)")
-    ax.set_title(f"Loss vs. Params (Model trained on Goal: {Goal.STRONG_GOAL.value})")
-    ax.legend()
-    ax.grid(True, which="both", ls="--")
+        # Model trained on weak goal, evaluated on weak rule
+        df_weak = df[df["goal"] == Goal.WEAK_GOAL]
+        sns.lineplot(
+            data=df_weak,
+            x="n_parameters",
+            y="avg_weak_loss",
+            label="standard",
+            marker="s",
+            linestyle="-",
+            errorbar="sd",
+            ax=ax,
+            legend=False,
+        )
+
+        # Model trained on strong goal, evaluated on weak rule
+        df_strong = df[df["goal"] == Goal.STRONG_GOAL]
+        sns.lineplot(
+            data=df_strong,
+            x="n_parameters",
+            y="avg_weak_loss",
+            label="no_diagonal",
+            marker="d",
+            linestyle="-",
+            errorbar="sd",
+            ax=ax,
+            legend=False,
+        )
+
+        ax.axhline(
+            y=minimal_loss_weak,
+            color="gray",
+            linestyle="--",
+            label="Min Achievable Weak Loss",
+        )
+        ax.set_xscale("log")
+        ax.set_ylim(0, 3)
+        ax.set_xlabel("Number of Parameters (log scale)")
+        ax.set_ylabel("CE-loss (μ ± σ, evaluated on weak rule)")
+        ax.set_title("Tic-Tac-Toe: CE-loss on weak rule (standard) vs. model size")
+
+        # Create custom legend with mixed font styles
+        from matplotlib.font_manager import FontProperties
+
+        handles, labels = ax.get_legend_handles_labels()
+        legend = ax.legend(handles, labels)
+
+        # Apply different font styles to legend items
+        for i, (text, label) in enumerate(zip(legend.get_texts(), labels)):
+            if label in ["standard", "no_diagonal"]:
+                text.set_fontfamily("monospace")
+            # For "Min Achievable Weak Loss", keep default font (no change needed)
+
+        ax.grid(True, which="both", ls="--")
+
+    else:
+        # Original complex plot with both subplots
+        fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+
+        # Left (Performance on weak rule)
+        ax = axes[0]
+        df_weak = df[df["goal"] == Goal.WEAK_GOAL]
+        sns.lineplot(  # Random
+            data=df_weak,
+            x="n_parameters",
+            y="avg_random_loss",
+            label="Random CE Loss",
+            marker="o",
+            linestyle="-",
+            errorbar="sd",
+            ax=ax,
+            legend=False,
+        )
+        sns.lineplot(  # Weak
+            data=df_weak,
+            x="n_parameters",
+            y="avg_weak_loss",
+            label="Weak CE Loss",
+            marker="s",
+            linestyle="-",
+            errorbar="sd",
+            ax=ax,
+            legend=False,
+        )
+        sns.lineplot(  # Strong
+            data=df_weak,
+            x="n_parameters",
+            y="avg_strong_loss",
+            label="Strong CE Loss",
+            marker="d",
+            linestyle="-",
+            errorbar="sd",
+            ax=ax,
+            legend=False,
+        )
+        ax.axhline(
+            y=minimal_loss_weak,
+            color="gray",
+            linestyle="--",
+            label="Min Achievable Weak Loss",
+        )
+        ax.set_xscale("log")
+        ax.set_ylim(0, 6)
+        ax.set_xlabel("Number of Parameters (log scale)")
+        ax.set_ylabel("Loss (μ ± σ over indices)")
+        ax.set_title(f"Loss vs. Params (Model trained on Goal: {Goal.WEAK_GOAL.value})")
+        ax.legend()
+        ax.grid(True, which="both", ls="--")
+
+        # Right (Performance on strong rule)
+        ax = axes[1]
+        df_strong = df[df["goal"] == Goal.STRONG_GOAL]
+        sns.lineplot(  # Random
+            data=df_strong,
+            x="n_parameters",
+            y="avg_random_loss",
+            label="Random CE Loss",
+            marker="o",
+            linestyle="-",
+            errorbar="sd",
+            ax=ax,
+            legend=False,
+        )
+        sns.lineplot(  # Weak
+            data=df_strong,
+            x="n_parameters",
+            y="avg_weak_loss",
+            label="Weak CE Loss",
+            marker="s",
+            linestyle="-",
+            errorbar="sd",
+            ax=ax,
+            legend=False,
+        )
+        sns.lineplot(  # Strong
+            data=df_strong,
+            x="n_parameters",
+            y="avg_strong_loss",
+            label="Strong CE Loss",
+            marker="d",
+            linestyle="-",
+            errorbar="sd",
+            ax=ax,
+            legend=False,
+        )
+        ax.axhline(
+            y=minimal_loss_strong,
+            color="gray",
+            linestyle="--",
+            label="Min Achievable Strong Loss",
+        )
+        ax.set_xscale("log")
+        ax.set_ylim(0, 6)
+        ax.set_xlabel("Number of Parameters (log scale)")
+        ax.set_ylabel("Loss (μ ± σ over indices)")
+        ax.set_title(
+            f"Loss vs. Params (Model trained on Goal: {Goal.STRONG_GOAL.value})"
+        )
+        ax.legend()
+        ax.grid(True, which="both", ls="--")
 
     plt.tight_layout()
 

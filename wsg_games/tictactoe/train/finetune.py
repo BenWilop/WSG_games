@@ -420,6 +420,179 @@ def _plot_wsg_side_by_side(
     plt.show()
 
 
+def _plot_wsg_over_each_other(
+    df: pd.DataFrame,
+    model_sizes: list[str],
+    save_path: str | None,
+) -> None:
+    """
+    Creates a vertically stacked plot for 'before' and 'after' finetuning,
+    showing the mean WSG gap with standard error of the mean (SEM).
+
+    The y-axis uses a symmetric log scale for consistent styling.
+    """
+
+    df["wsg_gap_before_finetuning"] /= 100
+    df["wsg_gap_after_finetuning"] /= 100
+
+    fig, (ax_before, ax_after) = plt.subplots(2, 1, figsize=(12, 16), sharex=True)
+    fig.suptitle("PGR: Before vs. After Finetuning (Mean ± SEM)", y=0.97)
+
+    colors = plt.cm.viridis(np.linspace(0, 1, len(model_sizes)))
+    weak_size_to_color = {size: color for size, color in zip(model_sizes, colors)}
+
+    # --- Helper function for advanced axis formatting ---
+    def _format_axis(ax, title, is_bottom=False):
+        ax.set_xscale("log")
+        if is_bottom:
+            ax.set_xlabel("Strong Model Parameters")
+        ax.set_title(title)
+
+        # --- Y-axis Symlog Scaling and Formatting from Reference ---
+        ax.set_yscale("symlog", linthresh=1.0, linscale=2.0)
+
+        # Determine y-axis range from all data points
+        all_vals = pd.concat(
+            [df["wsg_gap_before_finetuning"], df["wsg_gap_after_finetuning"]]
+        ).dropna()
+        y_min, y_max = all_vals.min(), all_vals.max()
+        y_margin = (y_max - y_min) * 0.1
+        # y_range = (min(-10, y_min - y_margin), max(120, y_max + y_margin))
+        y_range = (-50, 10)
+        ax.set_ylim(y_range)
+
+        # Add horizontal reference lines
+        ax.axhline(0, color="red", linestyle="-", linewidth=0.8)
+        # ax.axhline(1, color="blue", linestyle=":", linewidth=1) # Original line for 100%
+
+        # Add shaded regions for the log parts of the symlog scale
+        ax.axhspan(1, y_range[1], alpha=0.1, color="gray", zorder=0)
+        ax.axhspan(y_range[0], -1, alpha=0.1, color="gray", zorder=0)
+
+        # --- Custom Y-axis Ticks for Symlog Scale ---
+        linear_ticks = [-0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8]
+        log_ticks_pos = [2, 5, 10, 20, 50, 100, 200, 500]
+        log_ticks_neg = [-2, -5, -10, -20, -50, -100, -200, -500]
+
+        all_ticks = sorted(
+            list(
+                set(
+                    [t for t in log_ticks_neg if t >= y_range[0]]
+                    + [-1]
+                    + linear_ticks
+                    + [1]
+                    + [t for t in log_ticks_pos if t <= y_range[1]]
+                )
+            )
+        )
+
+        tick_labels = [
+            f"{tick:.1f}" if -1 < tick < 1 and tick != 0 else f"{tick}"
+            for tick in all_ticks
+        ]
+        ax.set_yticks(all_ticks)
+        ax.set_yticklabels(tick_labels)
+
+        ax.grid(True, which="both", ls="--", alpha=0.3)
+
+    # --- Main Plotting Loop ---
+    for weak_size in model_sizes:
+        df_weak = df[df["weak_size"] == weak_size]
+        if df_weak.empty:
+            continue
+
+        # Aggregate data: calculate mean and standard error of the mean
+        agg_df = (
+            df_weak.groupby("n_parameters_strong")
+            .agg(
+                mean_before=("wsg_gap_before_finetuning", "mean"),
+                sem_before=(
+                    "wsg_gap_before_finetuning",
+                    lambda x: np.std(x, ddof=1) / np.sqrt(np.size(x))
+                    if np.size(x) > 1
+                    else 0,
+                ),
+                mean_after=("wsg_gap_after_finetuning", "mean"),
+                sem_after=(
+                    "wsg_gap_after_finetuning",
+                    lambda x: np.std(x, ddof=1) / np.sqrt(np.size(x))
+                    if np.size(x) > 1
+                    else 0,
+                ),
+            )
+            .reset_index()
+            .sort_values("n_parameters_strong")
+        )
+
+        if agg_df.empty:
+            continue
+
+        color = weak_size_to_color.get(weak_size)
+        x = agg_df["n_parameters_strong"]
+
+        # --- Plot "Before Finetuning" (Top) ---
+        y_mean_before = agg_df["mean_before"]
+        y_sem_before = agg_df["sem_before"]
+        ax_before.plot(
+            x,
+            y_mean_before,
+            marker="o",
+            linestyle="-",
+            color=color,
+            label=f"{weak_size}",
+        )
+        ax_before.fill_between(
+            x,
+            y_mean_before - y_sem_before,
+            y_mean_before + y_sem_before,
+            color=color,
+            alpha=0.2,
+        )
+
+        # --- Plot "After Finetuning" (Bottom) ---
+        y_mean_after = agg_df["mean_after"]
+        y_sem_after = agg_df["sem_after"]
+        ax_after.plot(x, y_mean_after, marker="o", linestyle="-", color=color)
+        ax_after.fill_between(
+            x,
+            y_mean_after - y_sem_after,
+            y_mean_after + y_sem_after,
+            color=color,
+            alpha=0.2,
+        )
+
+    # --- Final Formatting ---
+    _format_axis(ax_before, "Pretrained", is_bottom=False)
+    _format_axis(ax_after, "Finetuned", is_bottom=True)
+    ax_before.set_ylabel("PGR")
+    ax_after.set_ylabel("PGR")
+
+    # Move legend to top under title
+    handles, labels = ax_before.get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        title="Weak Model Size",
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.93),
+        ncol=len(model_sizes),
+        prop={"family": "monospace"},
+    )
+
+    fig.tight_layout(rect=[0, 0, 1, 0.90])  # Leave space for legend
+
+    if save_path:
+        # File suffix is now constant as the scale is no longer an option
+        full_save_path = os.path.join(save_path, "over_each_other_plot.png")
+        try:
+            plt.savefig(full_save_path, bbox_inches="tight", dpi=300)
+            print(f"Plot saved to {full_save_path}")
+        except Exception as e:
+            print(f"Error saving plot to {full_save_path}: {e}")
+
+    plt.show()
+
+
 def plot_wsg_plot(
     df: pd.DataFrame,
     model_sizes: list[str],
@@ -865,6 +1038,13 @@ def plot_wsg_gap_finetuned_models(
                 model_sizes=model_sizes,
                 aggregate_data=aggregate_data,  # Pass the boolean
                 y_axis_log=False,
+                save_path=save_path,
+            )
+        elif plot_style == "over_each_other":
+            print("\nPlotting 'over_each_other' style (log scale y-axis)...")
+            _plot_wsg_over_each_other(
+                df=df,
+                model_sizes=model_sizes,
                 save_path=save_path,
             )
         else:
